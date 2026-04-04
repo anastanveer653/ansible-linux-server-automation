@@ -1,0 +1,16 @@
+---
+# ══════════════════════════════════════════════════════════════
+# Playbook: setup-monitoring.yml
+# Deploy Node Exporter on all servers
+# Usage: ansible-playbook playbooks/setup-monitoring.yml
+# ══════════════════════════════════════════════════════════════
+
+- name: Install Prometheus Node Exporter
+  hosts: all
+  become: true
+
+  vars:
+    install_monitoring: true
+
+  roles:
+    - role: monitoring

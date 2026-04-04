@@ -1,0 +1,60 @@
+---
+# ══════════════════════════════════════════════════════════════
+# Ansible Linux Server Automation — Master Playbook
+# Applies all roles to all servers in your inventory
+# ══════════════════════════════════════════════════════════════
+
+- name: Full Server Baseline + Hardening
+  hosts: all
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify OS is supported
+      ansible.builtin.assert:
+        that:
+          - ansible_os_family in ['Debian', 'RedHat']
+          - ansible_distribution_major_version | int >= 20
+        fail_msg: >
+          Unsupported OS: {{ ansible_distribution }} {{ ansible_distribution_version }}.
+          Supported: Ubuntu 20+, Debian 11+, RHEL/CentOS 8+.
+
+    - name: Update apt cache (Debian/Ubuntu)
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == 'Debian'
+
+  roles:
+    - role: baseline
+      tags: [baseline, always]
+
+    - role: users
+      tags: [users]
+
+    - role: ssh_hardening
+      tags: [ssh, hardening, security]
+
+    - role: firewall
+      tags: [firewall, security]
+
+    - role: fail2ban
+      tags: [fail2ban, security]
+
+    - role: docker
+      tags: [docker]
+      when: install_docker | default(false)
+
+    - role: monitoring
+      tags: [monitoring]
+      when: install_monitoring | default(false)
+
+  post_tasks:
+    - name: Print setup summary
+      ansible.builtin.debug:
+        msg:
+          - "✅ Server setup complete: {{ inventory_hostname }}"
+          - "   OS      : {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "   IP      : {{ ansible_default_ipv4.address }}"
+          - "   SSH Port: {{ ssh_port | default(22) }}"
+          - "   Firewall: {{ 'UFW' if ansible_os_family == 'Debian' else 'firewalld' }}"

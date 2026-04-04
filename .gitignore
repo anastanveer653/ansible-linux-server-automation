@@ -1,0 +1,30 @@
+# Ansible artifacts
+*.retry
+.ansible/
+
+# Sensitive files — NEVER commit these
+inventory/hosts.yml         # Use hosts.example.yml as template
+group_vars/all/vault.yml
+*.vault
+*vault*
+secrets/
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo

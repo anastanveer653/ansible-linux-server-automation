@@ -1,0 +1,93 @@
+---
+# ══════════════════════════════════════════════
+# Role: firewall
+# UFW (Debian/Ubuntu) or firewalld (RHEL/CentOS)
+# ══════════════════════════════════════════════
+
+# ── UFW (Debian/Ubuntu) ────────────────────────
+- name: Install UFW
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+  when: ansible_os_family == 'Debian'
+
+- name: Reset UFW to defaults (clean slate)
+  community.general.ufw:
+    state: reset
+  when: ansible_os_family == 'Debian'
+
+- name: Set UFW default — deny all inbound
+  community.general.ufw:
+    direction: incoming
+    policy: deny
+  when: ansible_os_family == 'Debian'
+
+- name: Set UFW default — allow all outbound
+  community.general.ufw:
+    direction: outgoing
+    policy: allow
+  when: ansible_os_family == 'Debian'
+
+- name: Allow specified TCP ports (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item | string }}"
+    proto: tcp
+  loop: "{{ firewall_allowed_tcp_ports }}"
+  when: ansible_os_family == 'Debian'
+
+- name: Allow specified UDP ports (UFW)
+  community.general.ufw:
+    rule: allow
+    port: "{{ item | string }}"
+    proto: udp
+  loop: "{{ firewall_allowed_udp_ports }}"
+  when:
+    - ansible_os_family == 'Debian'
+    - firewall_allowed_udp_ports | length > 0
+
+- name: Allow loopback interface
+  community.general.ufw:
+    rule: allow
+    interface: lo
+    direction: in
+  when: ansible_os_family == 'Debian'
+
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+    logging: "on"
+  when: ansible_os_family == 'Debian'
+
+# ── firewalld (RHEL/CentOS) ────────────────────
+- name: Install firewalld
+  ansible.builtin.yum:
+    name: firewalld
+    state: present
+  when: ansible_os_family == 'RedHat'
+
+- name: Start and enable firewalld
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+  when: ansible_os_family == 'RedHat'
+
+- name: Allow TCP ports (firewalld)
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ firewall_allowed_tcp_ports }}"
+  when: ansible_os_family == 'RedHat'
+
+- name: Verify firewall status
+  ansible.builtin.command:
+    cmd: "{{ 'ufw status' if ansible_os_family == 'Debian' else 'firewall-cmd --list-all' }}"
+  register: fw_status
+  changed_when: false
+
+- name: Show firewall status
+  ansible.builtin.debug:
+    var: fw_status.stdout_lines

@@ -1,0 +1,20 @@
+---
+# ══════════════════════════════════════════════════════════════
+# Playbook: security-hardening.yml
+# Run security modules only — no package installs
+# Usage: ansible-playbook playbooks/security-hardening.yml
+# ══════════════════════════════════════════════════════════════
+
+- name: Security Hardening Only
+  hosts: all
+  become: true
+
+  roles:
+    - role: ssh_hardening
+      tags: [ssh]
+
+    - role: firewall
+      tags: [firewall]
+
+    - role: fail2ban
+      tags: [fail2ban]

@@ -1,0 +1,36 @@
+---
+# ══════════════════════════════════════════════
+# Role: fail2ban
+# Brute-force protection for SSH and more
+# ══════════════════════════════════════════════
+
+- name: Install fail2ban
+  ansible.builtin.package:
+    name: fail2ban
+    state: present
+
+- name: Deploy fail2ban jail.local config
+  ansible.builtin.template:
+    src: jail.local.j2
+    dest: /etc/fail2ban/jail.local
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Enable and start fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: started
+    enabled: true
+
+- name: Verify fail2ban SSH jail is active
+  ansible.builtin.command: fail2ban-client status sshd
+  register: f2b_status
+  changed_when: false
+  failed_when: false
+
+- name: Show fail2ban status
+  ansible.builtin.debug:
+    var: f2b_status.stdout_lines
+  when: f2b_status.stdout_lines is defined

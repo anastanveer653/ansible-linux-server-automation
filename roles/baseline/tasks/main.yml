@@ -1,0 +1,83 @@
+---
+# ══════════════════════════════════════════════
+# Role: baseline — Server Essentials Setup
+# ══════════════════════════════════════════════
+
+- name: Set server timezone
+  community.general.timezone:
+    name: "{{ server_timezone }}"
+  notify: Restart cron
+
+- name: Set system locale
+  ansible.builtin.command:
+    cmd: "localectl set-locale LANG={{ server_locale }}"
+  changed_when: false
+
+- name: Install baseline packages
+  ansible.builtin.package:
+    name: "{{ baseline_packages }}"
+    state: present
+
+- name: Remove insecure legacy packages
+  ansible.builtin.package:
+    name: "{{ baseline_remove_packages }}"
+    state: absent
+
+- name: Apply sysctl kernel hardening settings
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: true
+    sysctl_set: true
+  loop: "{{ sysctl_settings | dict2items }}"
+  notify: Apply sysctl
+
+- name: Ensure core system directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /etc/ansible-managed
+    - /var/log/audit
+
+- name: Drop managed-by marker
+  ansible.builtin.copy:
+    content: |
+      This server is managed by Ansible.
+      Do not edit configuration files manually.
+      Repo: https://github.com/anastanveer653/ansible-linux-server-automation
+      Last applied: {{ ansible_date_time.iso8601 }}
+    dest: /etc/ansible-managed/info
+    mode: "0644"
+
+- name: Configure automatic security updates (Debian/Ubuntu)
+  ansible.builtin.include_tasks: auto_updates_debian.yml
+  when:
+    - ansible_os_family == 'Debian'
+    - auto_updates_enabled | bool
+
+- name: Disable core dumps
+  ansible.builtin.lineinfile:
+    path: /etc/security/limits.conf
+    line: "* hard core 0"
+    state: present
+
+- name: Restrict /tmp with noexec (if separate partition)
+  ansible.builtin.mount:
+    path: /tmp
+    opts: "defaults,noexec,nosuid,nodev"
+    state: mounted
+  failed_when: false   # Gracefully skip if /tmp is not a separate partition
+
+- name: Ensure auditd is installed and enabled
+  ansible.builtin.package:
+    name: auditd
+    state: present
+
+- name: Enable and start auditd
+  ansible.builtin.service:
+    name: auditd
+    state: started
+    enabled: true

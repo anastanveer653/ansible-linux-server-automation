@@ -1,0 +1,63 @@
+---
+# ══════════════════════════════════════════════
+# Role: users
+# Create admin user, disable root SSH
+# ══════════════════════════════════════════════
+
+- name: Create admin user
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups: "{{ admin_groups }}"
+    append: true
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Create .ssh directory for admin user
+  ansible.builtin.file:
+    path: "/home/{{ admin_user }}/.ssh"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+- name: Add authorized SSH public key for admin user
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ admin_ssh_public_key }}"
+    state: present
+  when: admin_ssh_public_key is defined and admin_ssh_public_key | length > 0
+
+- name: Grant passwordless sudo to admin user
+  ansible.builtin.copy:
+    content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    dest: "/etc/sudoers.d/{{ admin_user }}"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "/usr/sbin/visudo -cf %s"
+
+- name: Lock the root account password
+  ansible.builtin.user:
+    name: root
+    password_lock: true
+
+- name: Ensure /etc/sudoers.d is included
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers
+    line: "#includedir /etc/sudoers.d"
+    state: present
+    validate: "/usr/sbin/visudo -cf %s"
+
+- name: Set umask to 027 in /etc/profile
+  ansible.builtin.lineinfile:
+    path: /etc/profile
+    line: "umask 027"
+    state: present
+
+- name: Set secure PATH in /etc/environment
+  ansible.builtin.lineinfile:
+    path: /etc/environment
+    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"'
+    regexp: "^PATH="
+    state: present

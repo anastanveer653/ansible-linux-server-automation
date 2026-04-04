@@ -1,0 +1,43 @@
+# Managed by Ansible — do not edit manually
+
+[DEFAULT]
+bantime  = {{ fail2ban_bantime }}
+findtime = {{ fail2ban_findtime }}
+maxretry = {{ fail2ban_maxretry }}
+backend  = systemd
+destemail = root@localhost
+sendername = Fail2Ban
+action = %(action_)s
+
+# ── SSH Protection ────────────────────────────
+[sshd]
+enabled  = true
+port     = {{ ssh_port }}
+filter   = sshd
+logpath  = %(sshd_log)s
+maxretry = {{ fail2ban_maxretry }}
+bantime  = {{ fail2ban_bantime }}
+
+# ── Repeat offender — longer ban ──────────────
+[sshd-ddos]
+enabled  = true
+port     = {{ ssh_port }}
+filter   = sshd
+logpath  = %(sshd_log)s
+maxretry = 2
+bantime  = 86400
+
+# ── HTTP/HTTPS (uncomment if running web server)
+# [nginx-http-auth]
+# enabled  = true
+# filter   = nginx-http-auth
+# port     = http,https
+# logpath  = %(nginx_error_log)s
+# maxretry = 5
+
+# [nginx-botsearch]
+# enabled  = true
+# filter   = nginx-botsearch
+# port     = http,https
+# logpath  = %(nginx_access_log)s
+# maxretry = 2
