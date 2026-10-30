@@ -11,10 +11,11 @@
         database: passwd
         key: sysadmin
 
-    - name: Read root password status
-      ansible.builtin.command: passwd -S root
-      register: verify_root_status
-      changed_when: false
+    # passwd -S output and exit codes differ between distros; the shadow hash does not.
+    - name: Read root shadow entry
+      ansible.builtin.getent:
+        database: shadow
+        key: root
 
     - name: Read admin authorized_keys
       ansible.builtin.slurp:
@@ -24,7 +25,7 @@
     - name: Assert users
       ansible.builtin.assert:
         that:
-          - verify_root_status.stdout.split()[1] in ['L', 'LK']
+          - ansible_facts['getent_shadow']['root'][0] is match('!')
           - "'molecule@ci' in (verify_admin_keys.content | b64decode)"
           - ansible_facts['getent_passwd']['sysadmin'] is defined
 
