@@ -1,0 +1,28 @@
+---
+# Copy to inventory/hosts.yml (git-ignored) and replace the addresses.
+# ansible_user is the hardened admin account; use playbooks/new-vps-setup.yml with
+# -e ansible_user=root for the very first run on a fresh server.
+
+all:
+  vars:
+    ansible_user: sysadmin
+    ansible_port: 22
+
+  children:
+    webservers:
+      hosts:
+        web01:
+          ansible_host: 203.0.113.10
+        web02:
+          ansible_host: 203.0.113.11
+
+    dbservers:
+      hosts:
+        db01:
+          ansible_host: 203.0.113.20
+
+    docker_hosts:
+      hosts:
+        app01:
+          ansible_host: 203.0.113.40
+          install_docker: true

@@ -1,16 +1,14 @@
 ---
-# ══════════════════════════════════════════════════════════════
-# Playbook: setup-docker.yml
-# Install Docker Engine + Compose on target hosts
-# Usage: ansible-playbook playbooks/setup-docker.yml -l docker_hosts
-# ══════════════════════════════════════════════════════════════
+#   ansible-playbook playbooks/setup-docker.yml -l docker_hosts
 
-- name: Install Docker
+- name: Install Docker Engine
   hosts: docker_hosts
   become: true
+  gather_facts: true
 
   vars:
     install_docker: true
 
   roles:
+    - role: preflight
     - role: docker

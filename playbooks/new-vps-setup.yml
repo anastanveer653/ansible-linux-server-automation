@@ -1,38 +1,31 @@
 ---
-# ══════════════════════════════════════════════════════════════
-# Playbook: new-vps-setup.yml
-# One-command fresh VPS bootstrap
-# Usage: ansible-playbook playbooks/new-vps-setup.yml -i "YOUR_IP," -u root
-# ══════════════════════════════════════════════════════════════
+# First run on a fresh server, connecting as root (or the cloud image user, e.g. ubuntu).
+# After this run only users_admin_name can log in, so switch ansible_user to it.
+#
+#   ansible-playbook playbooks/new-vps-setup.yml -l web01 -e ansible_user=root
 
-- name: Bootstrap a fresh VPS from root
+- name: Bootstrap a fresh server
   hosts: all
   become: true
+  gather_facts: true
 
   vars:
-    # Override defaults for fresh-server setup
-    ssh_password_authentication: "yes"  # Temporarily allow until key is added
+    preflight_bootstrap: true
 
-  pre_tasks:
-    - name: Display target server info
-      ansible.builtin.debug:
-        msg:
-          - "Bootstrapping: {{ inventory_hostname }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-
+  # sshd goes last: once it restarts, the bootstrap user can no longer open new connections.
   roles:
+    - role: preflight
     - role: baseline
     - role: users
-    - role: ssh_hardening
     - role: firewall
     - role: fail2ban
+    - role: sshd
 
   post_tasks:
-    - name: VPS setup complete
+    - name: Next steps
       ansible.builtin.debug:
         msg:
-          - "✅ VPS is ready!"
-          - "   SSH in with: ssh {{ admin_user }}@{{ ansible_host }} -p {{ ssh_port }}"
-          - "   Root login is now DISABLED."
-          - "   Firewall is ACTIVE."
-          - "   Fail2Ban is RUNNING."
+          - "{{ inventory_hostname }} is hardened."
+          - "Log in with: ssh -p {{ sshd_port }} {{ users_admin_name }}@{{ ansible_host | default(inventory_hostname) }}"
+          - "Set ansible_user: {{ users_admin_name }} and ansible_port: {{ sshd_port }} for this host in your inventory."
+          - "Root and password logins are disabled from now on."

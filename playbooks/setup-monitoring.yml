@@ -1,16 +1,17 @@
 ---
-# ══════════════════════════════════════════════════════════════
-# Playbook: setup-monitoring.yml
-# Deploy Node Exporter on all servers
-# Usage: ansible-playbook playbooks/setup-monitoring.yml
-# ══════════════════════════════════════════════════════════════
+# Installs node_exporter and re-renders the firewall so the source-restricted
+# port 9100 rule in group_vars (firewall_rules) becomes active.
+#   ansible-playbook playbooks/setup-monitoring.yml
 
-- name: Install Prometheus Node Exporter
+- name: Install Prometheus node_exporter
   hosts: all
   become: true
+  gather_facts: true
 
   vars:
     install_monitoring: true
 
   roles:
-    - role: monitoring
+    - role: preflight
+    - role: firewall
+    - role: node_exporter
