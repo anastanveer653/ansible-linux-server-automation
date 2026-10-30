@@ -1,236 +1,245 @@
-# ⚙️ Ansible Linux Server Automation
+# Ansible Linux Server Automation
 
-![Ansible](https://img.shields.io/badge/Ansible-2.14+-EE0000?logo=ansible&logoColor=white)
-![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%20|%2022.04%20|%2024.04-E95420?logo=ubuntu)
-![Debian](https://img.shields.io/badge/Debian-11%20|%2012-A81D33?logo=debian)
-![RHEL](https://img.shields.io/badge/RHEL%20%2F%20CentOS-8%20|%209-EE0000?logo=redhat)
-![License](https://img.shields.io/badge/License-MIT-green)
-![Stars](https://img.shields.io/github/stars/anastanveer653/ansible-linux-server-automation?style=social)
+[![CI](https://github.com/anastanveer653/ansible-linux-server-automation/actions/workflows/ci.yml/badge.svg)](https://github.com/anastanveer653/ansible-linux-server-automation/actions/workflows/ci.yml)
+![ansible-lint](https://img.shields.io/badge/ansible--lint-production-brightgreen)
+![Ansible](https://img.shields.io/badge/ansible--core-2.16%2B-EE0000?logo=ansible&logoColor=white)
+![Platforms](https://img.shields.io/badge/Ubuntu%20%7C%20Debian%20%7C%20RHEL%20%7C%20Rocky%20%7C%20Alma%20%7C%20CentOS%20Stream-informational)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> **One command to go from a blank Linux server to a hardened, production-ready machine.**
+Turns a fresh Ubuntu, Debian or RHEL-family server into a hardened, monitored host, and keeps it that way on every run.
 
-A complete, modular Ansible playbook collection for automating Linux server setup, security hardening, and software deployment. Built for sysadmins, DevOps engineers, and anyone who manages VPS or bare-metal servers.
+The roles are idempotent, tested in CI on six distributions with Molecule, and built so that a bad variable can't lock you out of your own server.
+
+```text
+$ ansible-playbook site.yml
+PLAY RECAP
+web01  : ok=115  changed=63  unreachable=0  failed=0
+$ ansible-playbook site.yml
+web01  : ok=96   changed=0   unreachable=0  failed=0     <- second run changes nothing
+```
 
 ---
 
-## ⚡ Quick Start
+## Contents
+
+- [What it does](#what-it-does)
+- [Safety rails](#safety-rails)
+- [Quick start](#quick-start)
+- [Configuration](#configuration)
+- [Day-2 operations](#day-2-operations)
+- [Testing](#testing)
+- [Design decisions](#design-decisions)
+- [Project layout](#project-layout)
+
+## What it does
+
+```mermaid
+flowchart LR
+    P[preflight<br/><sub>OS, version and<br/>lockout checks</sub>] --> B[baseline]
+    B --> U[users]
+    U --> F[firewall]
+    F --> S[sshd]
+    S --> FB[fail2ban]
+    FB -. install_docker .-> D[docker]
+    FB -. install_monitoring .-> N[node_exporter]
+```
+
+| Role | What it configures |
+|---|---|
+| **preflight** | Refuses to touch a host when the OS isn't supported or the run would lock you out (see [Safety rails](#safety-rails)). |
+| **baseline** | Distro essentials, timezone and locale, EPEL on EL. Automatic security updates (`unattended-upgrades` / `dnf-automatic`). 28 kernel `sysctl` hardening parameters. Disabled legacy kernel modules. `auditd` with identity, sudoers, sshd, time and kernel-module rules. Core dumps off, `umask 027`. |
+| **users** | Non-root admin with SSH keys and sudo (`sudo` / `wheel` per distro). Optional extra users with exclusive keys. Root password locked. Every sudoers file is checked with `visudo`. |
+| **sshd** | Hardened drop-in config: key-only auth, no root, `AllowUsers`, no forwarding. Modern crypto, with post-quantum `mlkem768x25519` / `sntrup761x25519` key exchange chosen by detected OpenSSH version. Weak DH moduli removed. SELinux port labelling. Safe port changes. |
+| **firewall** | One declarative **nftables** ruleset for every distro: default-deny inbound, per-source SSH rate limiting, source-restricted rules (IPv4 and IPv6), rate-limited drop logging. Replaces ufw / firewalld. |
+| **fail2ban** | nftables ban actions, `sshd` jail in aggressive mode, incremental ban time for repeat offenders, `recidive` jail (1-week all-port ban). |
+| **docker** | Docker Engine and Compose plugin from Docker's signed repository (deb822 / dnf). `daemon.json` checked with `dockerd --validate`. Published ports bind to `127.0.0.1` by default because Docker bypasses the host firewall. |
+| **node_exporter** | Prometheus node_exporter for any CPU architecture, **SHA-256 verified**, upgraded in place when the version changes. Runs as a heavily sandboxed systemd service. |
+
+## Safety rails
+
+Hardening SSH and the firewall is how people lock themselves out of servers. This project treats that as a bug:
+
+| Risk | Protection |
+|---|---|
+| No SSH key configured, password login disabled | `preflight` fails **before any change** if `users_admin_authorized_keys` is empty. |
+| Admin user not in `AllowUsers` | `preflight` fails before any change. |
+| Ansible's own connection user (`root`, `ubuntu`) can't log in after hardening | `preflight` fails and tells you to use the bootstrap playbook or switch `ansible_user`. |
+| Changing `sshd_port` | The firewall opens the new port **and** keeps the current one. sshd restarts, Ansible waits for the new port and moves its connection to it. The old port closes on the next run. |
+| Port change on Ubuntu 22.10+ (`ssh.socket` ignores `Port`) | Socket activation is replaced by a normal `ssh.service`. |
+| Port change on SELinux hosts | Port is labelled `ssh_port_t` before sshd restarts. |
+| Broken config files | `sshd -t`, `visudo -cf`, `nft -c`, `fail2ban-client --test` and `dockerd --validate` run **before** a file is written or a service restarts. |
+| cloud-init re-enabling password login | Settings live in `sshd_config.d/00-hardening.conf`, which sshd reads first, so later drop-ins can't override them. |
+| Bad variable types | Every role has `meta/argument_specs.yml`, so options are type-checked when the role starts. |
+
+## Quick start
+
+**Requirements:** ansible-core 2.16+ on your machine. On the servers: SSH access and Python 3.
 
 ```bash
-# 1. Clone the repo
 git clone https://github.com/anastanveer653/ansible-linux-server-automation.git
 cd ansible-linux-server-automation
-
-# 2. Install Ansible collections
 ansible-galaxy collection install -r requirements.yml
 
-# 3. Edit your inventory
-cp inventory/hosts.yml inventory/hosts.yml.bak
-nano inventory/inventory/hosts.yml   # Add your server IPs
-
-# 4. Edit variables
-nano inventory/group_vars/all.yml    # Set your admin user, SSH port, etc.
-
-# 5. Run the full playbook
-ansible-playbook site.yml
-
-# Or just run security hardening
-ansible-playbook playbooks/security-hardening.yml
+cp inventory/hosts.example.yml inventory/hosts.yml   # git-ignored
+$EDITOR inventory/hosts.yml                          # your servers
+$EDITOR inventory/group_vars/all.yml                 # at minimum: users_admin_authorized_keys
 ```
 
----
-
-## 🧱 What Gets Configured
-
-### 🖥️ Baseline (`roles/baseline`)
-- Sets **timezone** and **locale**
-- Installs **essential tools**: curl, git, htop, vim, jq, rsync, net-tools, and more
-- **Removes insecure legacy packages**: telnet, rsh, nis, talk
-- Applies **kernel hardening** via sysctl (IP spoofing, SYN floods, ICMP, ASLR)
-- Configures **automatic security updates** (unattended-upgrades)
-- Enables **auditd** for system call auditing
-- Disables **core dumps**
-- Drops `/etc/ansible-managed/info` marker on every managed host
-
-### 👤 Users (`roles/users`)
-- Creates a **non-root sudo admin user**
-- Adds your **SSH public key** to authorized_keys
-- Locks the **root account password**
-- Sets **umask 027** for tighter file permissions
-- Grants **passwordless sudo** to admin user
-
-### 🔐 SSH Hardening (`roles/ssh_hardening`) — CIS Aligned
-- Changes **SSH port** (optional)
-- Disables **root login** and **password authentication**
-- Enforces **key-based auth only**
-- Allows only **strong ciphers and algorithms** (ED25519, AES-GCM, ChaCha20)
-- Removes **weak DSA host keys**
-- Sets **MaxAuthTries**, **ClientAliveInterval**, **LoginGraceTime**
-- Disables X11, TCP, and agent forwarding
-- Adds **login banner** (legal warning)
-- Validates config before applying (`sshd -t`)
-
-### 🔥 Firewall (`roles/firewall`)
-- **UFW** on Debian/Ubuntu — deny all inbound, allow configured ports
-- **firewalld** on RHEL/CentOS
-- Only opens ports you specify in `group_vars/all.yml`
-- Enables **UFW logging**
-
-### 🚫 Fail2Ban (`roles/fail2ban`)
-- Bans IPs after **5 failed SSH attempts** (configurable)
-- **Double-ban** rule: 24-hour ban for repeat offenders
-- Stubs for **Nginx** HTTP auth protection (commented, easy to enable)
-
-### 🐳 Docker (`roles/docker`) *(optional)*
-- Installs **Docker Engine** + **Docker Compose plugin** from official repo
-- Adds users to `docker` group
-- Configures **secure daemon defaults**: log rotation, no userland proxy, no new privileges
-
-### 📊 Monitoring (`roles/monitoring`) *(optional)*
-- Installs **Prometheus Node Exporter** as a systemd service
-- Runs as a dedicated **non-root** `node_exporter` user
-- Opens the metrics port in the firewall
-- Verifies endpoint is responding after install
-
----
-
-## 🗂️ Project Structure
-
-```
-ansible-linux-server-automation/
-│
-├── site.yml                          # Master playbook — runs everything
-├── ansible.cfg                       # Ansible configuration
-├── requirements.yml                  # Galaxy collections to install
-│
-├── inventory/
-│   ├── hosts.yml                     # Your server inventory
-│   └── group_vars/
-│       └── all.yml                   # All variables in one place
-│
-├── playbooks/
-│   ├── security-hardening.yml        # SSH + Firewall + Fail2Ban only
-│   ├── setup-docker.yml              # Docker only
-│   ├── setup-monitoring.yml          # Node Exporter only
-│   └── new-vps-setup.yml             # One-shot fresh VPS bootstrap
-│
-└── roles/
-    ├── baseline/                     # System essentials + kernel hardening
-    ├── users/                        # Admin user creation
-    ├── ssh_hardening/                # CIS-aligned SSH config
-    ├── firewall/                     # UFW / firewalld
-    ├── fail2ban/                     # Brute-force protection
-    ├── docker/                       # Docker Engine + Compose
-    └── monitoring/                   # Prometheus Node Exporter
-```
-
----
-
-## 🎯 Common Usage Examples
+**1. First run on a fresh server.** Connect as `root` (or the cloud image user):
 
 ```bash
-# Full setup on all servers
-ansible-playbook site.yml
-
-# Fresh VPS bootstrap (run as root on new server)
-ansible-playbook playbooks/new-vps-setup.yml -i "192.168.1.100," -u root
-
-# Security hardening only
-ansible-playbook playbooks/security-hardening.yml
-
-# Install Docker on docker_hosts group only
-ansible-playbook playbooks/setup-docker.yml -l docker_hosts
-
-# Run specific tags only
-ansible-playbook site.yml --tags "ssh,firewall"
-
-# Dry run (check mode — no changes made)
-ansible-playbook site.yml --check
-
-# Run on a single host
-ansible-playbook site.yml -l web01
-
-# Verbose output for debugging
-ansible-playbook site.yml -vvv
+ansible-playbook playbooks/new-vps-setup.yml -l web01 -e ansible_user=root
 ```
 
----
+**2. Every run after that.** Connect as the admin user, which `hosts.example.yml` already sets:
 
-## ⚙️ Configuration
+```bash
+ansible-playbook site.yml --check --diff   # preview
+ansible-playbook site.yml                  # apply
+```
 
-All settings live in `inventory/group_vars/all.yml`. Key options:
+## Configuration
+
+Every option is documented in its role's [`defaults/main.yml`](roles/) and type-checked by `meta/argument_specs.yml`. The ones most people change:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `users_admin_name` | `sysadmin` | Non-root sudo user |
+| `users_admin_authorized_keys` | `[]` | **Required.** Public keys for the admin |
+| `users_managed` | `[]` | Extra users: `{name, groups, authorized_keys, sudo, state}` |
+| `sshd_port` | `22` | Safe to change, see [Safety rails](#safety-rails) |
+| `sshd_allow_users` | `[admin]` | `AllowUsers` list |
+| `firewall_allowed_tcp_ports` | `[80, 443]` | Open to the world |
+| `firewall_rules` | `[]` | `{port, proto, sources, comment, enabled}` source-restricted rules |
+| `firewall_ssh_rate_limit` | `10/minute burst 20 packets` | Per-source new-connection limit |
+| `baseline_timezone` | `UTC` | IANA timezone |
+| `baseline_auto_updates_reboot` | `false` | Reboot automatically after kernel updates |
+| `baseline_sysctl_overrides` | `{}` | Merged over the hardening defaults |
+| `install_docker` / `install_monitoring` | `false` | Optional roles |
+| `docker_publish_localhost_only` | `true` | `-p 8080:80` binds to `127.0.0.1` |
+| `node_exporter_version` | `1.9.1` | Change it to upgrade in place |
+
+Keep secrets such as `users_admin_password_hash` in an Ansible Vault file: `ansible-vault create inventory/group_vars/all/vault.yml`.
+
+## Day-2 operations
+
+```bash
+# Only part of the stack
+ansible-playbook site.yml --tags ssh,firewall
+ansible-playbook playbooks/security-hardening.yml
+
+# Single host, dry run with diff
+ansible-playbook site.yml -l web01 --check --diff
+
+# Move SSH to 2222: set sshd_port: 2222, run, then set ansible_port: 2222 in the inventory
+ansible-playbook site.yml
+
+# Optional components
+ansible-playbook playbooks/setup-docker.yml -l docker_hosts
+ansible-playbook playbooks/setup-monitoring.yml
+```
+
+Expose node_exporter only to Prometheus:
 
 ```yaml
-# SSH
-ssh_port: 22                          # Change to 2222 for obscurity
-ssh_password_authentication: "no"    # Key-based only
-
-# Admin user
-admin_user: "sysadmin"
-admin_ssh_public_key: "ssh-ed25519 AAAA..."  # Your public key
-
-# Firewall — only these ports open
-firewall_allowed_tcp_ports:
-  - 22    # SSH
-  - 80    # HTTP
-  - 443   # HTTPS
-
-# Fail2Ban
-fail2ban_maxretry: 5
-fail2ban_bantime: 3600               # 1 hour
-
-# Optional features
-install_docker: false
-install_monitoring: false
+install_monitoring: true
+firewall_rules:
+  - { port: 9100, proto: tcp, sources: ["10.0.0.5/32"], comment: prometheus }
 ```
 
----
+## Testing
 
-## ✅ Supported Operating Systems
+Every push and pull request runs:
 
-| OS | Version | Tested |
-|---|---|---|
-| Ubuntu | 20.04, 22.04, 24.04 | ✅ |
-| Debian | 11, 12 | ✅ |
-| RHEL / AlmaLinux / Rocky | 8, 9 | ✅ |
-| CentOS Stream | 8, 9 | ✅ |
-
----
-
-## 🔒 Security Controls Applied
-
-| Control | Details |
+| Stage | Tooling |
 |---|---|
-| SSH hardening | CIS Level 1 aligned, strong ciphers only |
-| Kernel parameters | IP spoofing, SYN floods, ICMP, ASLR via sysctl |
-| Automatic updates | Security patches applied automatically |
-| Brute-force protection | Fail2Ban watching SSH with repeat offender rules |
-| Firewall | Default-deny inbound, explicit allowlist only |
-| Audit logging | auditd enabled for system call tracking |
-| Core dumps disabled | Prevents credential leakage from crashes |
-| Legacy packages removed | telnet, rsh, nis and others removed |
+| Lint | `yamllint` and `ansible-lint` on the strict **production** profile |
+| Syntax | `ansible-playbook --syntax-check` for every playbook |
+| Integration | **Molecule** runs `site.yml` in systemd containers on **Ubuntu 22.04, Ubuntu 24.04, Debian 12, Debian 13, Rocky Linux 9, CentOS Stream 9** |
+| Idempotence | A second converge must report `changed=0` |
+| Verification | 20+ assertions on live state: effective `sshd -T` settings, loaded nftables rules, active fail2ban jails, a container run through Docker, a node_exporter scrape |
 
----
-
-## 📋 Prerequisites
-
-- **Ansible** 2.14+ on your local machine
-- **Python** 3.8+ on target servers
-- **SSH access** to target servers (key-based recommended)
-- **sudo** or **root** access on target servers
+A weekly scheduled run catches breakage from upstream packages and images.
 
 ```bash
-# Install Ansible (Ubuntu/Debian)
-sudo apt install ansible -y
-
-# Or via pip
-pip install ansible
-
-# Install required collections
-ansible-galaxy collection install -r requirements.yml
+make deps                     # pip + collections
+make lint
+make test DISTRO=rockylinux9  # full Molecule run in Docker (also: centos9, debian13, ...)
 ```
 
----
+## Design decisions
 
-## 📄 License
+<details>
+<summary><b>Why nftables instead of ufw + firewalld?</b></summary>
 
-MIT © [Anas Tanveer](https://github.com/anastanveer653)
+Both are front-ends to nftables on current distros. Writing one ruleset directly means:
+- the same rules on every distro;
+- the whole ruleset is replaced atomically and declaratively, so an old rule disappears when you remove it from the variables (ufw can only add rules, not converge to a desired state);
+- it is validated with `nft -c` before it is loaded.
+
+The project owns only the `inet hardening` table and never runs `flush ruleset`, so Docker's and fail2ban's tables survive a reload.
+</details>
+
+<details>
+<summary><b>Why an sshd drop-in instead of templating sshd_config?</b></summary>
+
+sshd keeps the **first** value it reads for an option. A file included at the top of `sshd_config` wins over the distro defaults and over files that cloud-init writes later, such as `50-cloud-init.conf` with `PasswordAuthentication yes`. The distro's own `sshd_config`, including its correct `Subsystem sftp` path, stays intact.
+</details>
+
+<details>
+<summary><b>Why no SSH cipher list on RHEL / Rocky / Alma / CentOS Stream?</b></summary>
+
+On the RHEL family, SSH crypto is controlled system-wide by `crypto-policies`. Overriding it per daemon goes against vendor guidance and can break FIPS mode. Use `update-crypto-policies --set FUTURE` instead. On Debian and Ubuntu, the role sets explicit Kex, Cipher and MAC allow-lists.
+</details>
+
+<details>
+<summary><b>Why does Docker bind published ports to 127.0.0.1?</b></summary>
+
+Docker writes its own iptables/nftables rules, so `docker run -p 5432:5432` exposes the port to the internet **regardless of the host firewall**. With `"ip": "127.0.0.1"` in `daemon.json`, publishing a service to the world becomes a deliberate act: `-p 0.0.0.0:443:443`.
+</details>
+
+<details>
+<summary><b>Why does the bootstrap playbook run sshd last?</b></summary>
+
+As soon as sshd restarts, `root` and the cloud image user can no longer open new SSH connections. Running sshd last means every other role finishes on the original connection.
+</details>
+
+## Supported platforms
+
+Exactly what the CI matrix tests. Other versions are refused by `preflight` unless you override `preflight_supported_os`.
+
+| Distribution | Versions |
+|---|---|
+| Ubuntu | 22.04, 24.04 |
+| Debian | 12, 13 |
+| Rocky Linux / AlmaLinux / RHEL | 9 |
+| CentOS Stream | 9 |
+
+CentOS Linux 7 and 8 are end-of-life and receive no security updates, so they are deliberately not supported.
+
+## Project layout
+
+```text
+.
+├── site.yml                    # full stack
+├── playbooks/
+│   ├── new-vps-setup.yml       # first run as root / cloud user
+│   ├── security-hardening.yml  # firewall + sshd + fail2ban
+│   ├── setup-docker.yml
+│   └── setup-monitoring.yml
+├── inventory/
+│   ├── hosts.example.yml       # copy to hosts.yml (git-ignored)
+│   └── group_vars/all.yml      # shared settings
+├── roles/<role>/
+│   ├── defaults/main.yml       # every option, documented
+│   ├── meta/argument_specs.yml # type checking
+│   ├── vars/{Debian,RedHat}.yml
+│   ├── tasks/ handlers/ templates/
+├── molecule/default/           # converge -> idempotence -> verify
+├── molecule/images/            # CentOS Stream 9 systemd test image
+└── .github/workflows/ci.yml    # lint + 6-distro Molecule matrix
+```
+
+## License
+
+[MIT](LICENSE) © Anas Tanveer
