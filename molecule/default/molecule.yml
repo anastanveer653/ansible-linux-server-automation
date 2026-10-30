@@ -28,6 +28,9 @@ provisioner:
   inventory:
     group_vars:
       all:
+        # The docker connection is already root; sudo root->root fails PAM account
+        # checks in RHEL containers on GitHub runners. Real hosts still use sudo.
+        ansible_become: false
         users_admin_name: sysadmin
         users_admin_authorized_keys:
           - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGR4y9bTLPvxxrHStofi6pV3SksEUYCW2Lu7/rsoeDQw molecule@ci
