@@ -1,0 +1,65 @@
+---
+- name: Check controller Ansible version
+  ansible.builtin.assert:
+    that: ansible_version.full is version(preflight_min_ansible_version, '>=')
+    fail_msg: "ansible-core >= {{ preflight_min_ansible_version }} is required, found {{ ansible_version.full }}."
+    quiet: true
+  run_once: true
+
+- name: Check operating system is supported
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] in preflight_supported_os
+      - ansible_facts['distribution_major_version'] in preflight_supported_os[ansible_facts['distribution']] | default([])
+    fail_msg: >-
+      {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }} is not supported.
+      Supported: {{ preflight_supported_os | to_json }}. Override preflight_supported_os at your own risk.
+    quiet: true
+
+- name: Check SSH port is valid
+  ansible.builtin.assert:
+    that:
+      - (sshd_port | default(22) | int) >= 1
+      - (sshd_port | default(22) | int) <= 65535
+    fail_msg: "sshd_port must be between 1 and 65535, got {{ sshd_port }}."
+    quiet: true
+
+- name: Lockout protection
+  when: preflight_lockout_checks | bool
+  block:
+    - name: Require at least one SSH key for the admin user
+      ansible.builtin.assert:
+        that: users_admin_authorized_keys | default([]) | length > 0
+        fail_msg: >-
+          users_admin_authorized_keys is empty. Password login is disabled by the sshd role,
+          so the admin user would have no way to log in. Add your public key(s) to group_vars.
+        quiet: true
+      when: not (sshd_password_authentication | default(false) | bool)
+
+    - name: Require the admin user to be allowed through SSH
+      ansible.builtin.assert:
+        that: >-
+          sshd_allow_users | default([]) | length == 0
+          or users_admin_name | default('sysadmin') in sshd_allow_users
+        fail_msg: >-
+          sshd_allow_users ({{ sshd_allow_users | join(', ') }}) does not include the admin user
+          '{{ users_admin_name }}'. Nobody with sudo would be able to log in.
+        quiet: true
+
+    - name: Require the Ansible connection user to survive hardening
+      ansible.builtin.assert:
+        that:
+          - preflight_connection_user != 'root' or sshd_permit_root_login | default('no') != 'no'
+          - >-
+            sshd_allow_users | default([]) | length == 0
+            or preflight_connection_user in sshd_allow_users
+        fail_msg: >-
+          Ansible connects as '{{ preflight_connection_user }}', which will not be able to log in after
+          hardening. Connect as '{{ users_admin_name | default('sysadmin') }}' (set ansible_user), or use
+          playbooks/new-vps-setup.yml for the first run on a fresh server.
+        quiet: true
+      when:
+        - not (preflight_bootstrap | bool)
+        - ansible_connection | default('ssh') in ['ssh', 'smart', 'paramiko', 'ansible.builtin.ssh', 'ansible.legacy.ssh']
+      vars:
+        preflight_connection_user: "{{ ansible_user | default(lookup('ansible.builtin.env', 'USER'), true) }}"
