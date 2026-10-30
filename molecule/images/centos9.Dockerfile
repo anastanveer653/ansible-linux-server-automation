@@ -13,5 +13,8 @@ RUN dnf -y install systemd python3 sudo which iproute \
              /lib/systemd/system/sockets.target.wants/*initctl* \
              /lib/systemd/system/basic.target.wants/*
 
+# Every real host runs D-Bus; timedatectl and node_exporter's systemd collector need it.
+RUN systemctl enable dbus-broker.service dbus.socket
+
 VOLUME ["/sys/fs/cgroup"]
 CMD ["/usr/lib/systemd/systemd"]

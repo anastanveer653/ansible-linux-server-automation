@@ -109,14 +109,20 @@
         that: verify_files.results | map(attribute='stat.exists') | min
         fail_msg: "Missing: {{ verify_files.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
 
-    - name: Read timezone
-      ansible.builtin.command: readlink -f /etc/localtime
+    # /etc/localtime is a symlink with timedatectl but a copy without it, so compare contents.
+    - name: Read timezone files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: true
+        checksum_algorithm: sha256
+      loop: [/etc/localtime, /usr/share/zoneinfo/Asia/Karachi]
       register: verify_tz
-      changed_when: false
 
     - name: Assert timezone
       ansible.builtin.assert:
-        that: verify_tz.stdout is search('Asia/Karachi$')
+        that:
+          - verify_tz.results[0].stat.checksum is defined
+          - verify_tz.results | map(attribute='stat.checksum') | unique | length == 1
 
     # ── Docker ───────────────────────────────────────────────────────────────
     - name: Read Docker daemon configuration
