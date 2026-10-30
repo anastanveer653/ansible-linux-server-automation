@@ -1,6 +1,6 @@
 ansible-core>=2.16,<2.20
 ansible-lint>=24.12
-yamllint>=1.35
+yamllint>=1.38.0
 molecule>=24.12
 molecule-plugins[docker]>=23.6
 docker>=7.1
