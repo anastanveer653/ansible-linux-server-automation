@@ -3,7 +3,7 @@
   ansible.builtin.user:
     name: "{{ users_item.name }}"
     groups: "{{ users_item.groups | default(omit) }}"
-    append: true
+    append: "{{ users_item.groups is defined }}"  # ansible-core 2.21+ rejects append without groups
     shell: "{{ users_item.shell | default('/bin/bash') }}"
     create_home: true
     state: "{{ users_item.state | default('present') }}"
