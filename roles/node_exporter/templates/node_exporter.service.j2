@@ -1,0 +1,41 @@
+{{ ansible_managed | comment }}
+{% set args = ['--web.listen-address=' ~ node_exporter_listen_address,
+               '--collector.textfile.directory=' ~ node_exporter_textfile_dir,
+               '--collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/docker/.+)($$|/)']
+             + node_exporter_collectors_enabled | map('regex_replace', '^', '--collector.') | list
+             + node_exporter_collectors_disabled | map('regex_replace', '^', '--no-collector.') | list %}
+[Unit]
+Description=Prometheus Node Exporter
+Documentation=https://github.com/prometheus/node_exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=node_exporter
+Group=node_exporter
+ExecStart=/usr/local/bin/node_exporter \
+    {{ args | join(' \\\n    ') }}
+Restart=on-failure
+RestartSec=5s
+
+# Sandboxing: read-only view of the system, no privileges, no new capabilities
+NoNewPrivileges=true
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

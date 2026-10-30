@@ -1,0 +1,31 @@
+---
+firewall_ssh_port: "{{ sshd_port | default(22) }}"
+# The port Ansible is connected on stays open too, so changing sshd_port never cuts the
+# running session. It is dropped on the next run once ansible_port is updated.
+firewall_ssh_ports: >-
+  {{ ([firewall_ssh_port | int]
+      + ([ansible_port | default(22) | int]
+         if ansible_connection | default('ssh') in ['ssh', 'smart', 'paramiko', 'ansible.builtin.ssh', 'ansible.legacy.ssh']
+         else []))
+     | unique }}
+
+# Per-source rate limit for new SSH connections (nftables meter). Empty string disables it.
+firewall_ssh_rate_limit: "10/minute burst 20 packets"
+
+# Open to everyone.
+firewall_allowed_tcp_ports: [80, 443]
+firewall_allowed_udp_ports: []
+
+# Source-restricted rules. "port" accepts a single port or a range ("8000-8100").
+#   - port: 9100
+#     proto: tcp
+#     sources: ["10.0.0.0/8", "fd00::/8"]
+#     comment: Prometheus scrape
+#     enabled: "{{ install_monitoring }}"
+firewall_rules: []
+
+firewall_allow_ping: true
+firewall_log_dropped: true
+
+# Stop and disable ufw / firewalld so only one tool owns the packet filter.
+firewall_disable_conflicting: true

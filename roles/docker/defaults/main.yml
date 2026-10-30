@@ -1,0 +1,31 @@
+---
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+# Members of the docker group are effectively root. Keep this list short.
+docker_users: []
+
+# Docker writes its own iptables rules, so "-p 8080:80" bypasses the host firewall.
+# With this on, ports published without an explicit IP bind to 127.0.0.1 only;
+# expose a service deliberately with "-p 0.0.0.0:8080:80".
+docker_publish_localhost_only: true
+
+docker_daemon_defaults:
+  log-driver: json-file
+  log-opts:
+    max-size: "50m"
+    max-file: "5"
+  live-restore: true # not compatible with Swarm mode
+  userland-proxy: false
+  no-new-privileges: true
+# Merged over docker_daemon_defaults (recursive).
+docker_daemon_options: {}
+
+docker_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: armhf

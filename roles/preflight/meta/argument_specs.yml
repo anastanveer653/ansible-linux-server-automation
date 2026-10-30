@@ -1,0 +1,17 @@
+---
+argument_specs:
+  main:
+    short_description: Abort early on unsupported hosts or configurations that would lock you out.
+    options:
+      preflight_lockout_checks:
+        type: bool
+        description: Run the SSH lockout assertions.
+      preflight_bootstrap:
+        type: bool
+        description: First run on a fresh host (connecting as root or the cloud image user).
+      preflight_min_ansible_version:
+        type: str
+        description: Minimum ansible-core version on the controller.
+      preflight_supported_os:
+        type: dict
+        description: Map of distribution name to list of supported major versions.

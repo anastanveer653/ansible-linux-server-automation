@@ -1,0 +1,152 @@
+---
+- name: Verify
+  hosts: all
+  become: true
+  gather_facts: true
+
+  tasks:
+    # ── Users ────────────────────────────────────────────────────────────────
+    - name: Read admin user
+      ansible.builtin.getent:
+        database: passwd
+        key: sysadmin
+
+    # passwd -S output and exit codes differ between distros; the shadow hash does not.
+    - name: Read root shadow entry
+      ansible.builtin.getent:
+        database: shadow
+        key: root
+
+    - name: Read admin authorized_keys
+      ansible.builtin.slurp:
+        src: /home/sysadmin/.ssh/authorized_keys
+      register: verify_admin_keys
+
+    - name: Assert users
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['getent_shadow']['root'][0] is match('!')
+          - "'molecule@ci' in (verify_admin_keys.content | b64decode)"
+          - ansible_facts['getent_passwd']['sysadmin'] is defined
+
+    - name: Check admin sudo rule syntax
+      ansible.builtin.command: visudo -cf /etc/sudoers.d/10-sysadmin
+      changed_when: false
+
+    # ── SSH ──────────────────────────────────────────────────────────────────
+    - name: Read effective sshd configuration
+      ansible.builtin.command: sshd -T
+      register: verify_sshd
+      changed_when: false
+
+    - name: Assert sshd settings
+      ansible.builtin.assert:
+        that:
+          - "'port 2222' in verify_sshd.stdout_lines"
+          - "'permitrootlogin no' in verify_sshd.stdout_lines"
+          - "'passwordauthentication no' in verify_sshd.stdout_lines"
+          - "'kbdinteractiveauthentication no' in verify_sshd.stdout_lines"
+          - "'x11forwarding no' in verify_sshd.stdout_lines"
+          - "'allowtcpforwarding no' in verify_sshd.stdout_lines"
+          - "'maxauthtries 3' in verify_sshd.stdout_lines"
+          - "'allowusers sysadmin' in verify_sshd.stdout_lines"
+
+    - name: Assert modern SSH crypto (Debian family)
+      ansible.builtin.assert:
+        that:
+          - verify_sshd.stdout is search('(?m)^kexalgorithms (mlkem768x25519-sha256,)?sntrup761x25519-sha512@openssh.com')
+          - verify_sshd.stdout is not search('(?m)^ciphers .*cbc')
+          - verify_sshd.stdout is not search('(?m)^macs .*hmac-sha1')
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Wait for sshd on the new port
+      ansible.builtin.wait_for:
+        port: 2222
+        timeout: 30
+
+    # ── Firewall ─────────────────────────────────────────────────────────────
+    - name: Read firewall table
+      ansible.builtin.command: nft list table inet hardening
+      register: verify_nft
+      changed_when: false
+
+    - name: Assert firewall rules
+      ansible.builtin.assert:
+        that:
+          - verify_nft.stdout is search('policy drop')
+          - verify_nft.stdout is search('tcp dport 2222 accept')
+          - verify_nft.stdout is search('tcp dport \{ 80, 443 \} accept')
+          - verify_nft.stdout is search('ip saddr 10.0.0.0/8 tcp dport 9100 accept')
+          - verify_nft.stdout is search('ip6 saddr fd00::/8 tcp dport 9100 accept')
+          - verify_nft.stdout is search('@ssh_flood_v4')
+
+    # ── fail2ban ─────────────────────────────────────────────────────────────
+    - name: Read fail2ban jails
+      ansible.builtin.command: fail2ban-client status
+      register: verify_f2b
+      changed_when: false
+
+    - name: Assert fail2ban jails
+      ansible.builtin.assert:
+        that:
+          - verify_f2b.stdout is search('sshd')
+          - verify_f2b.stdout is search('recidive')
+
+    # ── Baseline ─────────────────────────────────────────────────────────────
+    - name: Read hardening files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc/sysctl.d/90-hardening.conf
+        - /etc/modprobe.d/90-hardening.conf
+        - /etc/audit/rules.d/90-hardening.rules
+        - /etc/security/limits.d/90-coredump.conf
+        - /etc/ansible-managed
+      register: verify_files
+
+    - name: Assert hardening files exist
+      ansible.builtin.assert:
+        that: verify_files.results | map(attribute='stat.exists') | min
+        fail_msg: "Missing: {{ verify_files.results | rejectattr('stat.exists') | map(attribute='item') | list }}"
+
+    # /etc/localtime is a symlink with timedatectl but a copy without it, so compare contents.
+    - name: Read timezone files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: true
+        checksum_algorithm: sha256
+      loop: [/etc/localtime, /usr/share/zoneinfo/Asia/Karachi]
+      register: verify_tz
+
+    - name: Assert timezone
+      ansible.builtin.assert:
+        that:
+          - verify_tz.results[0].stat.checksum is defined
+          - verify_tz.results | map(attribute='stat.checksum') | unique | length == 1
+
+    # ── Docker ───────────────────────────────────────────────────────────────
+    - name: Read Docker daemon configuration
+      ansible.builtin.slurp:
+        src: /etc/docker/daemon.json
+      register: verify_daemon_json
+
+    - name: Assert Docker defaults
+      ansible.builtin.assert:
+        that:
+          - (verify_daemon_json.content | b64decode | from_json)['ip'] == '127.0.0.1'
+          - (verify_daemon_json.content | b64decode | from_json)['no-new-privileges']
+
+    - name: Run a container
+      ansible.builtin.command: docker run --rm hello-world
+      changed_when: false
+
+    # ── node_exporter ────────────────────────────────────────────────────────
+    - name: Scrape node_exporter
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9100/metrics
+        return_content: true
+      register: verify_metrics
+
+    - name: Assert metrics are exported
+      ansible.builtin.assert:
+        that: verify_metrics.content is search('node_systemd_unit_state')

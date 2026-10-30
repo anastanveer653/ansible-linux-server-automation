@@ -1,0 +1,29 @@
+---
+__baseline_packages:
+  - bind9-dnsutils
+  - ca-certificates
+  - curl
+  - git
+  - gnupg
+  - htop
+  - iproute2
+  - jq
+  - locales
+  - lsof
+  - procps
+  - rsync
+  - tcpdump
+  - tmux
+  - tzdata
+  - unzip
+  - vim
+
+__baseline_packages_absent:
+  - nis
+  - rsh-client
+  - talk
+  - talkd
+  - telnet
+
+__baseline_auditd_package: auditd
+__baseline_locale_file: /etc/default/locale

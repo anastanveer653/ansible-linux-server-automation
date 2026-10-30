@@ -1,0 +1,5 @@
+---
+__sshd_service: ssh
+__sshd_packages: [openssh-server]
+# Created by systemd-tmpfiles when sshd starts; "sshd -t" fails without it.
+__sshd_privsep_dir: /run/sshd

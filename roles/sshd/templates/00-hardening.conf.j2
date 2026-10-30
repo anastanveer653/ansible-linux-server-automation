@@ -1,0 +1,58 @@
+{{ ansible_managed | comment }}
+# sshd keeps the first value it reads for each option. This file is included at the top
+# of sshd_config, so it takes precedence over the distro and cloud-init drop-ins.
+{% macro yesno(value) %}{{ value if value is string else (value | bool | ternary('yes', 'no')) }}{% endmacro %}
+
+Port {{ sshd_port }}
+
+# Authentication
+PermitRootLogin {{ yesno(sshd_permit_root_login) }}
+PasswordAuthentication {{ yesno(sshd_password_authentication) }}
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+PermitEmptyPasswords no
+HostbasedAuthentication no
+IgnoreRhosts yes
+MaxAuthTries {{ sshd_max_auth_tries }}
+MaxSessions {{ sshd_max_sessions }}
+LoginGraceTime {{ sshd_login_grace_time }}
+{% if sshd_allow_users | length > 0 %}
+AllowUsers {{ sshd_allow_users | join(' ') }}
+{% endif %}
+{% if sshd_allow_groups | length > 0 %}
+AllowGroups {{ sshd_allow_groups | join(' ') }}
+{% endif %}
+
+# Session
+ClientAliveInterval {{ sshd_client_alive_interval }}
+ClientAliveCountMax {{ sshd_client_alive_count_max }}
+PermitUserEnvironment no
+UseDNS no
+
+# Forwarding
+X11Forwarding {{ yesno(sshd_x11_forwarding) }}
+AllowTcpForwarding {{ yesno(sshd_allow_tcp_forwarding) }}
+AllowAgentForwarding {{ yesno(sshd_allow_agent_forwarding) }}
+AllowStreamLocalForwarding no
+GatewayPorts no
+PermitTunnel no
+{% if sshd_manage_crypto | bool %}
+
+# Cryptography (OpenSSH {{ sshd_openssh_version }})
+KexAlgorithms {{ sshd_kex_algorithms | join(',') }}
+Ciphers {{ sshd_ciphers | join(',') }}
+MACs {{ sshd_macs | join(',') }}
+{% endif %}
+
+# Logging
+LogLevel {{ sshd_log_level }}
+{% if sshd_banner_enabled | bool %}
+Banner /etc/ssh/banner
+{% endif %}
+{% if sshd_extra_options | length > 0 %}
+
+# Extra options
+{% for option, value in sshd_extra_options | dictsort %}
+{{ option }} {{ yesno(value) }}
+{% endfor %}
+{% endif %}

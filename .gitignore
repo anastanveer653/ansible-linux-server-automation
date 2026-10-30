@@ -1,30 +1,27 @@
-# Ansible artifacts
+# Ansible runtime
 *.retry
 .ansible/
 
-# Sensitive files — NEVER commit these
-inventory/hosts.yml         # Use hosts.example.yml as template
-group_vars/all/vault.yml
-*.vault
-*vault*
-secrets/
+# Real inventory and secrets stay local (commit the *.example.yml templates instead)
+inventory/hosts.yml
+inventory/group_vars/*/vault.yml
+inventory/host_vars/
+.vault_pass*
 *.pem
 *.key
-id_rsa
-id_ed25519
+id_rsa*
+id_ed25519*
 
-# Python
+# Python / tooling
 __pycache__/
 *.pyc
 .venv/
 venv/
+.cache/
 
-# OS
+# OS / editor
 .DS_Store
 Thumbs.db
-
-# Editor
 .vscode/
 .idea/
 *.swp
-*.swo

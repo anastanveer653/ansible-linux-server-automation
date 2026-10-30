@@ -1,0 +1,8 @@
+{{ ansible_managed | comment }}
+{% for key, value in (baseline_sysctl | combine(baseline_sysctl_overrides)) | dictsort %}
+{{ key }} = {{ value }}
+{% endfor %}
+{% if baseline_disable_ipv6 | bool %}
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+{% endif %}

@@ -1,99 +1,32 @@
 ---
-# ══════════════════════════════════════════════════════════════
-# Group Variables — applied to ALL servers
-# Edit these values to customize your setup
-# ══════════════════════════════════════════════════════════════
+# Settings shared by every host. Each role documents all of its options in
+# roles/<role>/defaults/main.yml; only the ones you are likely to change are here.
 
-# ── General ───────────────────────────────────────────────────
-server_timezone: "UTC"                      # e.g. Asia/Karachi, US/Eastern
-server_locale: "en_US.UTF-8"
+# ── Admin access ───────────────────────────────────────────────────────────────
+users_admin_name: sysadmin
+users_admin_authorized_keys: []
+#  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@laptop"
 
-# ── Admin User ────────────────────────────────────────────────
-admin_user: "sysadmin"                      # Non-root sudo user to create
-admin_groups: ["sudo", "adm"]
-# admin_ssh_public_key: ""                  # Add your SSH public key here
+# ── SSH ────────────────────────────────────────────────────────────────────────
+sshd_port: 22
+sshd_allow_users: ["{{ users_admin_name }}"]
 
-# ── SSH Hardening ─────────────────────────────────────────────
-ssh_port: 22                                # Change to e.g. 2222 for obscurity
-ssh_permit_root_login: "no"
-ssh_password_authentication: "no"          # Key-based auth only
-ssh_max_auth_tries: 3
-ssh_client_alive_interval: 300
-ssh_client_alive_count_max: 2
-ssh_allowed_users: ["sysadmin"]            # Restrict SSH to specific users
+# ── Firewall ───────────────────────────────────────────────────────────────────
+firewall_allowed_tcp_ports: [80, 443]
+firewall_rules:
+  - port: 9100
+    proto: tcp
+    sources: ["10.0.0.0/8"]           # your Prometheus server(s)
+    comment: node_exporter
+    enabled: "{{ install_monitoring }}"
 
-# ── Firewall ──────────────────────────────────────────────────
-firewall_allowed_tcp_ports:
-  - "{{ ssh_port }}"                        # SSH
-  - 80                                      # HTTP
-  - 443                                     # HTTPS
+# ── System ─────────────────────────────────────────────────────────────────────
+baseline_timezone: UTC
+baseline_auto_updates_reboot: false
 
-firewall_allowed_udp_ports: []
-
-# ── Packages ──────────────────────────────────────────────────
-baseline_packages:
-  - curl
-  - wget
-  - git
-  - vim
-  - htop
-  - unzip
-  - net-tools
-  - dnsutils
-  - tcpdump
-  - lsof
-  - iotop
-  - tree
-  - jq
-  - rsync
-  - ca-certificates
-  - gnupg
-  - apt-transport-https
-
-baseline_remove_packages:
-  - telnet
-  - rsh-client
-  - rsh-redone-client
-  - nis
-  - talk
-  - talkd
-
-# ── Fail2Ban ──────────────────────────────────────────────────
-fail2ban_bantime: 3600          # Ban duration in seconds (1 hour)
-fail2ban_findtime: 600          # Window to count failures (10 minutes)
-fail2ban_maxretry: 5            # Failures before ban
-
-# ── Automatic Security Updates ───────────────────────────────
-auto_updates_enabled: true
-auto_updates_reboot: false
-auto_updates_reboot_time: "03:00"
-
-# ── Kernel Hardening (sysctl) ────────────────────────────────
-sysctl_settings:
-  # Network security
-  net.ipv4.conf.all.accept_redirects: 0
-  net.ipv4.conf.default.accept_redirects: 0
-  net.ipv4.conf.all.send_redirects: 0
-  net.ipv4.conf.all.accept_source_route: 0
-  net.ipv4.conf.all.log_martians: 1
-  net.ipv4.tcp_syncookies: 1
-  net.ipv4.icmp_echo_ignore_broadcasts: 1
-  net.ipv4.icmp_ignore_bogus_error_responses: 1
-  # IPv6 disable (set to 0 to enable IPv6)
-  net.ipv6.conf.all.disable_ipv6: 1
-  net.ipv6.conf.default.disable_ipv6: 1
-  # Kernel security
-  kernel.dmesg_restrict: 1
-  kernel.kptr_restrict: 2
-  kernel.randomize_va_space: 2
-  fs.suid_dumpable: 0
-
-# ── Docker (optional) ─────────────────────────────────────────
+# ── Optional services ─────────────────────────────────────────────────────────
 install_docker: false
-docker_users: ["sysadmin"]      # Users to add to docker group
-docker_compose_version: "v2.24.0"
-
-# ── Monitoring (optional) ─────────────────────────────────────
 install_monitoring: false
-node_exporter_version: "1.7.0"
-node_exporter_port: 9100
+
+# Secrets (e.g. users_admin_password_hash) belong in an encrypted file:
+#   ansible-vault create inventory/group_vars/all/vault.yml

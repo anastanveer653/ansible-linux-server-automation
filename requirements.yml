@@ -1,12 +1,7 @@
 ---
-# Install with: ansible-galaxy collection install -r requirements.yml
-
+# ansible-galaxy collection install -r requirements.yml
 collections:
   - name: ansible.posix
-    version: ">=1.5.0"
-
+    version: ">=1.5.4,<3.0.0"
   - name: community.general
-    version: ">=8.0.0"
-
-  - name: ansible.builtin
-    # Built-in, no install needed
+    version: ">=8.0.0,<12.0.0"

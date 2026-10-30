@@ -1,0 +1,26 @@
+---
+fail2ban_ssh_port: "{{ sshd_port | default(22) }}"
+
+fail2ban_bantime: 1h
+fail2ban_findtime: 10m
+fail2ban_maxretry: 5
+# Each repeat ban of the same IP lasts longer (1h, 2h, 4h ...) up to bantime_maxtime.
+fail2ban_bantime_increment: true
+fail2ban_bantime_maxtime: 1w
+
+# Ban IPs that keep getting banned, on all ports, for a week.
+fail2ban_recidive: true
+
+fail2ban_ignoreip: ["127.0.0.1/8", "::1"]
+
+# Matches the nftables firewall role.
+fail2ban_banaction: nftables-multiport
+fail2ban_banaction_allports: nftables-allports
+
+# Additional jails: name -> options.
+#   nginx-http-auth:
+#     enabled: true
+#     port: http,https
+#     logpath: /var/log/nginx/error.log
+#     backend: auto
+fail2ban_extra_jails: {}

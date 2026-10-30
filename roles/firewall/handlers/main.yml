@@ -1,0 +1,4 @@
+---
+- name: Load firewall ruleset
+  ansible.builtin.command: nft -f /etc/nftables.d/50-hardening.nft
+  changed_when: true

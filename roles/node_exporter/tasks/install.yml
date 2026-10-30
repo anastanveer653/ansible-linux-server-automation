@@ -1,0 +1,44 @@
+---
+- name: Create temporary download directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: node_exporter
+  register: node_exporter_tmp
+
+- name: Download and install node_exporter
+  vars:
+    node_exporter_release: "node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch_map[ansible_facts['architecture']] }}"
+  block:
+    - name: Download release archive (checksum verified)
+      ansible.builtin.get_url:
+        url: "{{ node_exporter_download_url }}/{{ node_exporter_release }}.tar.gz"
+        dest: "{{ node_exporter_tmp.path }}/{{ node_exporter_release }}.tar.gz"
+        checksum: "sha256:{{ node_exporter_download_url }}/sha256sums.txt"
+        mode: "0644"
+        timeout: 60
+      register: node_exporter_download
+      retries: 3
+      delay: 10
+      until: node_exporter_download is succeeded
+
+    - name: Unpack release archive
+      ansible.builtin.unarchive:
+        src: "{{ node_exporter_tmp.path }}/{{ node_exporter_release }}.tar.gz"
+        dest: "{{ node_exporter_tmp.path }}"
+        remote_src: true
+
+    - name: Install binary
+      ansible.builtin.copy:
+        src: "{{ node_exporter_tmp.path }}/{{ node_exporter_release }}/node_exporter"
+        dest: /usr/local/bin/node_exporter
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart node_exporter
+
+  always:
+    - name: Remove temporary download directory
+      ansible.builtin.file:
+        path: "{{ node_exporter_tmp.path }}"
+        state: absent

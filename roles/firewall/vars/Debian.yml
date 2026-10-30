@@ -1,0 +1,3 @@
+---
+__firewall_main_conf: /etc/nftables.conf
+__firewall_conflicting_services: [ufw]

@@ -1,0 +1,82 @@
+#!/usr/sbin/nft -f
+{{ ansible_managed | comment }}
+# Only the "inet hardening" table is replaced (atomically) on reload, so tables owned by
+# Docker, libvirt or fail2ban are left untouched.
+
+table inet hardening
+delete table inet hardening
+
+table inet hardening {
+{% if firewall_ssh_rate_limit | length > 0 %}
+    set ssh_flood_v4 {
+        type ipv4_addr
+        size 65535
+        flags dynamic, timeout
+        timeout 5m
+    }
+
+    set ssh_flood_v6 {
+        type ipv6_addr
+        size 65535
+        flags dynamic, timeout
+        timeout 5m
+    }
+
+{% endif %}
+    chain input {
+        type filter hook input priority filter; policy drop;
+
+        ct state invalid drop
+        ct state established,related accept
+        iifname "lo" accept
+
+        # ICMP errors and IPv6 neighbour discovery are required for a working network
+        icmp type { destination-unreachable, time-exceeded, parameter-problem } accept
+        icmpv6 type { destination-unreachable, packet-too-big, time-exceeded, parameter-problem, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert } accept
+{% if firewall_allow_ping | bool %}
+        icmp type echo-request limit rate 10/second accept
+        icmpv6 type echo-request limit rate 10/second accept
+{% endif %}
+
+        # SSH
+{% set ssh_ports = firewall_ssh_ports | join(', ') %}
+{% if firewall_ssh_rate_limit | length > 0 %}
+        meta nfproto ipv4 tcp dport { {{ ssh_ports }} } ct state new add @ssh_flood_v4 { ip saddr limit rate over {{ firewall_ssh_rate_limit }} } drop
+        meta nfproto ipv6 tcp dport { {{ ssh_ports }} } ct state new add @ssh_flood_v6 { ip6 saddr limit rate over {{ firewall_ssh_rate_limit }} } drop
+{% endif %}
+        tcp dport { {{ ssh_ports }} } accept
+{% if firewall_allowed_tcp_ports | length > 0 %}
+
+        # Public TCP services
+        tcp dport { {{ firewall_allowed_tcp_ports | join(', ') }} } accept
+{% endif %}
+{% if firewall_allowed_udp_ports | length > 0 %}
+
+        # Public UDP services
+        udp dport { {{ firewall_allowed_udp_ports | join(', ') }} } accept
+{% endif %}
+{% for rule in firewall_rules if rule.enabled | default(true) | bool %}
+{%   if loop.first %}
+
+        # Source-restricted services
+{%   endif %}
+{%   set v4 = rule.sources | default([]) | reject('search', ':') | list %}
+{%   set v6 = rule.sources | default([]) | select('search', ':') | list %}
+{%   set proto = rule.proto | default('tcp') %}
+{%   set comment = (' comment "' ~ rule.comment ~ '"') if rule.comment is defined else '' %}
+{%   if rule.sources | default([]) | length == 0 %}
+        {{ proto }} dport {{ rule.port }} accept{{ comment }}
+{%   endif %}
+{%   if v4 | length > 0 %}
+        ip saddr { {{ v4 | join(', ') }} } {{ proto }} dport {{ rule.port }} accept{{ comment }}
+{%   endif %}
+{%   if v6 | length > 0 %}
+        ip6 saddr { {{ v6 | join(', ') }} } {{ proto }} dport {{ rule.port }} accept{{ comment }}
+{%   endif %}
+{% endfor %}
+{% if firewall_log_dropped | bool %}
+
+        limit rate 5/minute log prefix "nft-drop: " level info
+{% endif %}
+    }
+}

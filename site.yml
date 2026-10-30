@@ -1,60 +1,49 @@
 ---
-# ══════════════════════════════════════════════════════════════
-# Ansible Linux Server Automation — Master Playbook
-# Applies all roles to all servers in your inventory
-# ══════════════════════════════════════════════════════════════
+# Full baseline + hardening for every host in the inventory.
+#   ansible-playbook site.yml                        # everything
+#   ansible-playbook site.yml --tags ssh,firewall    # a subset
+#   ansible-playbook site.yml --check --diff         # dry run
 
-- name: Full Server Baseline + Hardening
+- name: Harden Linux servers
   hosts: all
   become: true
   gather_facts: true
 
-  pre_tasks:
-    - name: Verify OS is supported
-      ansible.builtin.assert:
-        that:
-          - ansible_os_family in ['Debian', 'RedHat']
-          - ansible_distribution_major_version | int >= 20
-        fail_msg: >
-          Unsupported OS: {{ ansible_distribution }} {{ ansible_distribution_version }}.
-          Supported: Ubuntu 20+, Debian 11+, RHEL/CentOS 8+.
-
-    - name: Update apt cache (Debian/Ubuntu)
-      ansible.builtin.apt:
-        update_cache: true
-        cache_valid_time: 3600
-      when: ansible_os_family == 'Debian'
-
   roles:
+    - role: preflight
+      tags: [always]
+
     - role: baseline
-      tags: [baseline, always]
+      tags: [baseline]
 
     - role: users
       tags: [users]
 
-    - role: ssh_hardening
-      tags: [ssh, hardening, security]
-
+    # firewall before sshd: a new SSH port must be open before sshd moves to it
     - role: firewall
       tags: [firewall, security]
+
+    - role: sshd
+      tags: [ssh, security]
 
     - role: fail2ban
       tags: [fail2ban, security]
 
     - role: docker
       tags: [docker]
-      when: install_docker | default(false)
+      when: install_docker | default(false) | bool
 
-    - role: monitoring
+    - role: node_exporter
       tags: [monitoring]
-      when: install_monitoring | default(false)
+      when: install_monitoring | default(false) | bool
 
   post_tasks:
-    - name: Print setup summary
+    - name: Summary
       ansible.builtin.debug:
         msg:
-          - "✅ Server setup complete: {{ inventory_hostname }}"
-          - "   OS      : {{ ansible_distribution }} {{ ansible_distribution_version }}"
-          - "   IP      : {{ ansible_default_ipv4.address }}"
-          - "   SSH Port: {{ ssh_port | default(22) }}"
-          - "   Firewall: {{ 'UFW' if ansible_os_family == 'Debian' else 'firewalld' }}"
+          - "{{ inventory_hostname }}: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+          - "SSH      : port {{ sshd_port }}, users {{ sshd_allow_users | join(', ') }}, root login {{ sshd_permit_root_login }}"
+          - "Firewall : nftables, open tcp {{ (firewall_ssh_ports + firewall_allowed_tcp_ports) | join(', ') }}"
+          - "Docker   : {{ 'installed' if install_docker | default(false) | bool else 'skipped' }}"
+          - "Metrics  : {{ node_exporter_listen_address if install_monitoring | default(false) | bool else 'skipped' }}"
+      tags: [always]

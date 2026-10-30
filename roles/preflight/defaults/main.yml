@@ -1,0 +1,18 @@
+---
+# Abort before any change is made if the run would lock you out of the host.
+preflight_lockout_checks: true
+
+# Set to true by playbooks/new-vps-setup.yml: this run connects as root or the
+# cloud image user; every later run must connect as users_admin_name.
+preflight_bootstrap: false
+
+preflight_min_ansible_version: "2.16"
+
+# distribution -> supported major versions (exactly what CI tests).
+preflight_supported_os:
+  Ubuntu: ["22", "24"]
+  Debian: ["12", "13"]
+  CentOS: ["9"] # CentOS Stream; CentOS Linux 7/8 are end-of-life
+  Rocky: ["9"]
+  AlmaLinux: ["9"]
+  RedHat: ["9"]

@@ -1,0 +1,18 @@
+{{ ansible_managed | comment('c') }}
+Unattended-Upgrade::Origins-Pattern {
+{% if ansible_facts['distribution'] == 'Ubuntu' %}
+    "origin=Ubuntu,archive=${distro_codename}-security,label=Ubuntu";
+    "origin=UbuntuESMApps,archive=${distro_codename}-apps-security";
+    "origin=UbuntuESM,archive=${distro_codename}-infra-security";
+{% else %}
+    "origin=Debian,codename=${distro_codename},label=Debian-Security";
+    "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
+{% endif %}
+};
+
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "{{ baseline_auto_updates_reboot | bool | lower }}";
+Unattended-Upgrade::Automatic-Reboot-Time "{{ baseline_auto_updates_reboot_time }}";
+Unattended-Upgrade::SyslogEnable "true";

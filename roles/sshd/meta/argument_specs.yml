@@ -1,0 +1,77 @@
+---
+argument_specs:
+  main:
+    short_description: Hardened OpenSSH server.
+    options:
+      sshd_port:
+        type: int
+        description: Listening port. Changing it migrates the running Ansible connection.
+      sshd_permit_root_login:
+        type: str
+        choices: ["no", "prohibit-password", "forced-commands-only", "yes"]
+        description: PermitRootLogin value.
+      sshd_password_authentication:
+        type: bool
+        description: Allow password logins.
+      sshd_max_auth_tries:
+        type: int
+        description: MaxAuthTries.
+      sshd_max_sessions:
+        type: int
+        description: MaxSessions.
+      sshd_login_grace_time:
+        type: int
+        description: LoginGraceTime in seconds.
+      sshd_client_alive_interval:
+        type: int
+        description: ClientAliveInterval in seconds.
+      sshd_client_alive_count_max:
+        type: int
+        description: ClientAliveCountMax.
+      sshd_allow_users:
+        type: list
+        elements: str
+        description: AllowUsers. Empty means no restriction.
+      sshd_allow_groups:
+        type: list
+        elements: str
+        description: AllowGroups. Empty means no restriction.
+      sshd_allow_tcp_forwarding:
+        type: bool
+        description: AllowTcpForwarding.
+      sshd_allow_agent_forwarding:
+        type: bool
+        description: AllowAgentForwarding.
+      sshd_x11_forwarding:
+        type: bool
+        description: X11Forwarding.
+      sshd_log_level:
+        type: str
+        choices: [QUIET, FATAL, ERROR, INFO, VERBOSE, DEBUG, DEBUG1, DEBUG2, DEBUG3]
+        description: LogLevel.
+      sshd_banner_enabled:
+        type: bool
+        description: Show /etc/ssh/banner before login.
+      sshd_banner:
+        type: str
+        description: Banner text.
+      sshd_manage_crypto:
+        type: bool
+        description: Set KexAlgorithms, Ciphers and MACs (off on RHEL, which uses crypto-policies).
+      sshd_ciphers:
+        type: list
+        elements: str
+        description: Allowed ciphers.
+      sshd_macs:
+        type: list
+        elements: str
+        description: Allowed MACs.
+      sshd_moduli_min_size:
+        type: int
+        description: Remove DH group-exchange moduli smaller than this.
+      sshd_disable_socket_activation:
+        type: bool
+        description: Replace ssh.socket with ssh.service on Ubuntu 22.10+.
+      sshd_extra_options:
+        type: dict
+        description: Additional sshd options.

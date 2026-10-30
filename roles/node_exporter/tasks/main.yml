@@ -1,0 +1,60 @@
+---
+- name: Create node_exporter system user
+  ansible.builtin.user:
+    name: node_exporter
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+    home: /nonexistent
+
+- name: Check installed node_exporter version
+  ansible.builtin.command: /usr/local/bin/node_exporter --version
+  register: node_exporter_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Install node_exporter {{ node_exporter_version }}
+  ansible.builtin.include_tasks: install.yml
+  when: >-
+    node_exporter_installed.rc != 0
+    or ('version ' ~ node_exporter_version ~ ' ') not in (node_exporter_installed.stdout ~ node_exporter_installed.stderr)
+
+- name: Create textfile collector directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    owner: node_exporter
+    group: node_exporter
+    mode: "0755"
+
+- name: Deploy systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart node_exporter
+
+- name: Enable node_exporter
+  ansible.builtin.systemd_service:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Apply node_exporter changes now
+  ansible.builtin.meta: flush_handlers
+
+- name: Check metrics endpoint
+  ansible.builtin.uri:
+    url: "http://{{ node_exporter_check_host }}:{{ node_exporter_listen_address | regex_replace('^.*:', '') }}/metrics"
+    return_content: false
+  vars:
+    node_exporter_bind_host: "{{ node_exporter_listen_address | regex_replace(':[0-9]+$', '') }}"
+    node_exporter_check_host: "{{ '127.0.0.1' if node_exporter_bind_host in ['', '0.0.0.0', '[::]'] else node_exporter_bind_host }}"
+  register: node_exporter_metrics
+  retries: 5
+  delay: 2
+  until: node_exporter_metrics.status == 200

@@ -1,63 +1,54 @@
 ---
-# ══════════════════════════════════════════════
-# Role: users
-# Create admin user, disable root SSH
-# ══════════════════════════════════════════════
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
+
+- name: Require a password hash when sudo asks for a password
+  ansible.builtin.assert:
+    that: users_admin_passwordless_sudo | bool or users_admin_password_hash | length > 0
+    fail_msg: >-
+      users_admin_passwordless_sudo is false but users_admin_password_hash is empty:
+      the key-only admin user could never complete a sudo prompt.
+    quiet: true
 
 - name: Create admin user
   ansible.builtin.user:
-    name: "{{ admin_user }}"
-    groups: "{{ admin_groups }}"
+    name: "{{ users_admin_name }}"
+    groups: "{{ users_admin_groups }}"
     append: true
-    shell: /bin/bash
+    shell: "{{ users_admin_shell }}"
     create_home: true
+    password: "{{ users_admin_password_hash | default(omit, true) }}"
+    update_password: always
     state: present
 
-- name: Create .ssh directory for admin user
-  ansible.builtin.file:
-    path: "/home/{{ admin_user }}/.ssh"
-    state: directory
-    owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
-    mode: "0700"
-
-- name: Add authorized SSH public key for admin user
+- name: Install admin SSH keys
   ansible.posix.authorized_key:
-    user: "{{ admin_user }}"
-    key: "{{ admin_ssh_public_key }}"
+    user: "{{ users_admin_name }}"
+    key: "{{ users_admin_authorized_keys | join('\n') }}"
+    exclusive: "{{ users_admin_authorized_keys_exclusive }}"
     state: present
-  when: admin_ssh_public_key is defined and admin_ssh_public_key | length > 0
+  when: users_admin_authorized_keys | length > 0
 
-- name: Grant passwordless sudo to admin user
+- name: Configure admin sudo rule
   ansible.builtin.copy:
-    content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
-    dest: "/etc/sudoers.d/{{ admin_user }}"
+    dest: "/etc/sudoers.d/10-{{ users_admin_name }}"
+    content: |
+      # Managed by Ansible
+      {{ users_admin_name }} ALL=(ALL:ALL) {{ 'NOPASSWD: ' if users_admin_passwordless_sudo | bool else '' }}ALL
     owner: root
     group: root
     mode: "0440"
-    validate: "/usr/sbin/visudo -cf %s"
+    validate: /usr/sbin/visudo -cf %s
 
-- name: Lock the root account password
+- name: Manage additional users
+  ansible.builtin.include_tasks: managed_user.yml
+  loop: "{{ users_managed }}"
+  loop_control:
+    loop_var: users_item
+    label: "{{ users_item.name }}"
+
+- name: Lock root password
   ansible.builtin.user:
     name: root
     password_lock: true
-
-- name: Ensure /etc/sudoers.d is included
-  ansible.builtin.lineinfile:
-    path: /etc/sudoers
-    line: "#includedir /etc/sudoers.d"
-    state: present
-    validate: "/usr/sbin/visudo -cf %s"
-
-- name: Set umask to 027 in /etc/profile
-  ansible.builtin.lineinfile:
-    path: /etc/profile
-    line: "umask 027"
-    state: present
-
-- name: Set secure PATH in /etc/environment
-  ansible.builtin.lineinfile:
-    path: /etc/environment
-    line: 'PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"'
-    regexp: "^PATH="
-    state: present
+  when: users_lock_root_password | bool

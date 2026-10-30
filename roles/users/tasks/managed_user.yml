@@ -1,0 +1,40 @@
+---
+- name: "Manage user account: {{ users_item.name }}"
+  ansible.builtin.user:
+    name: "{{ users_item.name }}"
+    groups: "{{ users_item.groups | default(omit) }}"
+    append: true
+    shell: "{{ users_item.shell | default('/bin/bash') }}"
+    create_home: true
+    state: "{{ users_item.state | default('present') }}"
+    remove: "{{ users_item.state | default('present') == 'absent' }}"
+
+- name: "Manage SSH keys: {{ users_item.name }}"
+  ansible.posix.authorized_key:
+    user: "{{ users_item.name }}"
+    key: "{{ users_item.authorized_keys | join('\n') }}"
+    exclusive: true
+    state: present
+  when:
+    - users_item.state | default('present') == 'present'
+    - users_item.authorized_keys | default([]) | length > 0
+
+- name: "Manage sudo rule: {{ users_item.name }}"
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/20-{{ users_item.name }}"
+    content: |
+      # Managed by Ansible
+      {{ users_item.name }} ALL=(ALL:ALL) NOPASSWD: ALL
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+  when:
+    - users_item.state | default('present') == 'present'
+    - users_item.sudo | default(false) | bool
+
+- name: "Remove sudo rule: {{ users_item.name }}"
+  ansible.builtin.file:
+    path: "/etc/sudoers.d/20-{{ users_item.name }}"
+    state: absent
+  when: users_item.state | default('present') == 'absent' or not (users_item.sudo | default(false) | bool)
