@@ -20,6 +20,7 @@ help: ## Show this help
 deps: ## Install Python tooling and Ansible collections
 	pip install -r requirements-dev.txt
 	ansible-galaxy collection install -r requirements.yml
+	ansible-galaxy collection install community.docker
 
 lint: ## Run yamllint and ansible-lint
 	yamllint .
