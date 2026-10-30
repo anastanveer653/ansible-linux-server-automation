@@ -1,0 +1,57 @@
+---
+# Changing the port is safe mid-run: the firewall opens the new port first and the
+# connection is migrated. Update ansible_port in your inventory afterwards.
+sshd_port: 22
+
+# Quote these ("no"), unquoted YAML no/yes become booleans.
+sshd_permit_root_login: "no"
+sshd_password_authentication: false
+
+sshd_max_auth_tries: 3
+sshd_max_sessions: 5
+sshd_login_grace_time: 30
+sshd_client_alive_interval: 300
+sshd_client_alive_count_max: 2
+
+# Only these users/groups may log in. Empty list = no restriction.
+sshd_allow_users: ["{{ users_admin_name | default('sysadmin') }}"]
+sshd_allow_groups: []
+
+sshd_allow_tcp_forwarding: false
+sshd_allow_agent_forwarding: false
+sshd_x11_forwarding: false
+sshd_log_level: VERBOSE
+
+sshd_banner_enabled: true
+sshd_banner: |
+  Authorized access only. All activity on this system is logged and monitored.
+
+# On the RHEL family, SSH crypto is governed by system-wide crypto-policies
+# (update-crypto-policies); overriding it per daemon is discouraged by Red Hat.
+sshd_manage_crypto: "{{ ansible_facts['os_family'] != 'RedHat' }}"
+# Post-quantum hybrid KEX first; ML-KEM is added automatically on OpenSSH >= 9.9.
+sshd_kex_algorithms: >-
+  {{ (['mlkem768x25519-sha256'] if sshd_openssh_version is version('9.9', '>=') else [])
+     + ['sntrup761x25519-sha512@openssh.com', 'curve25519-sha256', 'curve25519-sha256@libssh.org',
+        'diffie-hellman-group16-sha512', 'diffie-hellman-group18-sha512',
+        'diffie-hellman-group-exchange-sha256'] }}
+sshd_ciphers:
+  - chacha20-poly1305@openssh.com
+  - aes256-gcm@openssh.com
+  - aes128-gcm@openssh.com
+  - aes256-ctr
+  - aes192-ctr
+  - aes128-ctr
+sshd_macs:
+  - hmac-sha2-512-etm@openssh.com
+  - hmac-sha2-256-etm@openssh.com
+  - umac-128-etm@openssh.com
+
+# Drop Diffie-Hellman group-exchange moduli smaller than 3072 bits.
+sshd_moduli_min_size: 3071
+
+# Ubuntu 22.10+ starts sshd through ssh.socket, which ignores "Port" in sshd_config.
+sshd_disable_socket_activation: true
+
+# Any other sshd option, e.g. { "MaxStartups": "10:30:60" }.
+sshd_extra_options: {}

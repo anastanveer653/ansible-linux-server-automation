@@ -1,0 +1,11 @@
+---
+- name: Validate full sshd configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  listen: Restart sshd
+
+- name: Restart sshd service
+  ansible.builtin.systemd_service:
+    name: "{{ __sshd_service }}"
+    state: restarted
+  listen: Restart sshd

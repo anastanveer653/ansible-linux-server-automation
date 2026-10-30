@@ -1,0 +1,31 @@
+---
+- name: Check whether ssh.socket is enabled
+  ansible.builtin.command: systemctl is-enabled ssh.socket # noqa: command-instead-of-module - read-only query
+  register: sshd_socket_state
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Replace ssh.socket with a standalone ssh.service
+  when: sshd_socket_state.stdout == 'enabled'
+  block:
+    - name: Disable ssh.socket
+      ansible.builtin.systemd_service:
+        name: ssh.socket
+        enabled: false
+        state: stopped
+
+    - name: Remove socket-activation drop-ins left by older releases
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/ssh.service.d/00-socket.conf
+        - /etc/systemd/system/ssh.socket.d/addresses.conf
+
+    - name: Enable ssh.service
+      ansible.builtin.systemd_service:
+        name: ssh.service
+        enabled: true
+        state: started
+        daemon_reload: true

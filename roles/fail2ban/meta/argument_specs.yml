@@ -1,0 +1,39 @@
+---
+argument_specs:
+  main:
+    short_description: fail2ban brute-force protection.
+    options:
+      fail2ban_ssh_port:
+        type: int
+        description: SSH port watched by the sshd jail.
+      fail2ban_bantime:
+        type: str
+        description: Initial ban duration (fail2ban time format, e.g. 1h).
+      fail2ban_findtime:
+        type: str
+        description: Window in which failures are counted.
+      fail2ban_maxretry:
+        type: int
+        description: Failures before a ban.
+      fail2ban_bantime_increment:
+        type: bool
+        description: Grow the ban time for repeat offenders.
+      fail2ban_bantime_maxtime:
+        type: str
+        description: Upper limit for incremental bans.
+      fail2ban_recidive:
+        type: bool
+        description: Enable the recidive jail.
+      fail2ban_ignoreip:
+        type: list
+        elements: str
+        description: Addresses that are never banned.
+      fail2ban_banaction:
+        type: str
+        description: Default ban action.
+      fail2ban_banaction_allports:
+        type: str
+        description: Ban action for all-port bans.
+      fail2ban_extra_jails:
+        type: dict
+        description: Additional jails (name -> options).

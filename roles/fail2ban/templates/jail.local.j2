@@ -1,43 +1,37 @@
-# Managed by Ansible — do not edit manually
+{{ ansible_managed | comment }}
 
 [DEFAULT]
 bantime  = {{ fail2ban_bantime }}
 findtime = {{ fail2ban_findtime }}
 maxretry = {{ fail2ban_maxretry }}
+{% if fail2ban_bantime_increment | bool %}
+bantime.increment = true
+bantime.maxtime   = {{ fail2ban_bantime_maxtime }}
+{% endif %}
+ignoreip = {{ fail2ban_ignoreip | join(' ') }}
 backend  = systemd
-destemail = root@localhost
-sendername = Fail2Ban
-action = %(action_)s
+banaction          = {{ fail2ban_banaction }}
+banaction_allports = {{ fail2ban_banaction_allports }}
 
-# ── SSH Protection ────────────────────────────
 [sshd]
-enabled  = true
-port     = {{ ssh_port }}
-filter   = sshd
-logpath  = %(sshd_log)s
-maxretry = {{ fail2ban_maxretry }}
-bantime  = {{ fail2ban_bantime }}
+enabled = true
+mode    = aggressive
+port    = {{ fail2ban_ssh_port }}
+{% if fail2ban_recidive | bool %}
 
-# ── Repeat offender — longer ban ──────────────
-[sshd-ddos]
-enabled  = true
-port     = {{ ssh_port }}
-filter   = sshd
-logpath  = %(sshd_log)s
-maxretry = 2
-bantime  = 86400
+[recidive]
+enabled   = true
+backend   = auto
+logpath   = /var/log/fail2ban.log
+banaction = %(banaction_allports)s
+bantime   = 1w
+findtime  = 1d
+maxretry  = 3
+{% endif %}
+{% for jail, options in fail2ban_extra_jails | dictsort %}
 
-# ── HTTP/HTTPS (uncomment if running web server)
-# [nginx-http-auth]
-# enabled  = true
-# filter   = nginx-http-auth
-# port     = http,https
-# logpath  = %(nginx_error_log)s
-# maxretry = 5
-
-# [nginx-botsearch]
-# enabled  = true
-# filter   = nginx-botsearch
-# port     = http,https
-# logpath  = %(nginx_access_log)s
-# maxretry = 2
+[{{ jail }}]
+{%   for key, value in options | dictsort %}
+{{ key }} = {{ value | lower if value is boolean else value }}
+{%   endfor %}
+{% endfor %}

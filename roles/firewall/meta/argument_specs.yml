@@ -1,0 +1,55 @@
+---
+argument_specs:
+  main:
+    short_description: Declarative nftables firewall.
+    options:
+      firewall_ssh_port:
+        type: int
+        description: SSH port to allow (defaults to sshd_port).
+      firewall_ssh_ports:
+        type: list
+        elements: int
+        description: All SSH ports to allow, including the one Ansible is connected on.
+      firewall_ssh_rate_limit:
+        type: str
+        description: Per-source limit for new SSH connections, e.g. "10/minute burst 20 packets". Empty disables.
+      firewall_allowed_tcp_ports:
+        type: list
+        elements: raw
+        description: TCP ports or ranges open to everyone.
+      firewall_allowed_udp_ports:
+        type: list
+        elements: raw
+        description: UDP ports or ranges open to everyone.
+      firewall_rules:
+        type: list
+        elements: dict
+        description: Source-restricted rules.
+        options:
+          port:
+            type: raw
+            required: true
+            description: Port or range.
+          proto:
+            type: str
+            choices: [tcp, udp]
+            description: Protocol (default tcp).
+          sources:
+            type: list
+            elements: str
+            description: IPv4/IPv6 addresses or CIDRs. Empty means everyone.
+          comment:
+            type: str
+            description: Rule comment.
+          enabled:
+            type: bool
+            description: Set to false to skip the rule.
+      firewall_allow_ping:
+        type: bool
+        description: Answer ICMP echo requests (rate-limited).
+      firewall_log_dropped:
+        type: bool
+        description: Log dropped packets (rate-limited).
+      firewall_disable_conflicting:
+        type: bool
+        description: Stop and disable ufw / firewalld.

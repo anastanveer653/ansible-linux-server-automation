@@ -1,0 +1,4 @@
+---
+__sshd_service: sshd
+__sshd_packages: [openssh-server, policycoreutils-python-utils]
+__sshd_privsep_dir: /usr/share/empty.sshd

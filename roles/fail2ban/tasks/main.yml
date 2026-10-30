@@ -1,15 +1,37 @@
 ---
-# ══════════════════════════════════════════════
-# Role: fail2ban
-# Brute-force protection for SSH and more
-# ══════════════════════════════════════════════
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
 
 - name: Install fail2ban
   ansible.builtin.package:
-    name: fail2ban
+    name: "{{ __fail2ban_packages }}"
     state: present
 
-- name: Deploy fail2ban jail.local config
+- name: Configure fail2ban daemon
+  ansible.builtin.copy:
+    dest: /etc/fail2ban/fail2ban.local
+    content: |
+      # Managed by Ansible
+      [Definition]
+      # recidive reads this file, so log to disk on every distro.
+      logtarget = /var/log/fail2ban.log
+      dbpurgeage = 8d
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart fail2ban
+
+- name: Make sure the fail2ban log exists for the recidive jail
+  ansible.builtin.file:
+    path: /var/log/fail2ban.log
+    state: touch
+    owner: root
+    group: root
+    mode: "0640"
+    access_time: preserve
+    modification_time: preserve
+
+- name: Configure jails
   ansible.builtin.template:
     src: jail.local.j2
     dest: /etc/fail2ban/jail.local
@@ -18,19 +40,19 @@
     mode: "0644"
   notify: Restart fail2ban
 
-- name: Enable and start fail2ban
-  ansible.builtin.service:
+- name: Enable fail2ban
+  ansible.builtin.systemd_service:
     name: fail2ban
-    state: started
     enabled: true
+    state: started
 
-- name: Verify fail2ban SSH jail is active
+- name: Apply fail2ban changes now
+  ansible.builtin.meta: flush_handlers
+
+- name: Check sshd jail is active
   ansible.builtin.command: fail2ban-client status sshd
-  register: f2b_status
+  register: fail2ban_sshd_status
   changed_when: false
-  failed_when: false
-
-- name: Show fail2ban status
-  ansible.builtin.debug:
-    var: f2b_status.stdout_lines
-  when: f2b_status.stdout_lines is defined
+  retries: 5
+  delay: 2
+  until: fail2ban_sshd_status.rc == 0

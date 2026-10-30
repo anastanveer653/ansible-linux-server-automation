@@ -1,93 +1,71 @@
 ---
-# ══════════════════════════════════════════════
-# Role: firewall
-# UFW (Debian/Ubuntu) or firewalld (RHEL/CentOS)
-# ══════════════════════════════════════════════
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
 
-# ── UFW (Debian/Ubuntu) ────────────────────────
-- name: Install UFW
-  ansible.builtin.apt:
-    name: ufw
+- name: Install nftables
+  ansible.builtin.package:
+    name: nftables
     state: present
-  when: ansible_os_family == 'Debian'
 
-- name: Reset UFW to defaults (clean slate)
-  community.general.ufw:
-    state: reset
-  when: ansible_os_family == 'Debian'
+- name: Create nftables include directory
+  ansible.builtin.file:
+    path: /etc/nftables.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
-- name: Set UFW default — deny all inbound
-  community.general.ufw:
-    direction: incoming
-    policy: deny
-  when: ansible_os_family == 'Debian'
+- name: Deploy firewall ruleset
+  ansible.builtin.template:
+    src: hardening.nft.j2
+    dest: /etc/nftables.d/50-hardening.nft
+    owner: root
+    group: root
+    mode: "0600"
+    validate: nft -c -f %s
+  notify: Load firewall ruleset
 
-- name: Set UFW default — allow all outbound
-  community.general.ufw:
-    direction: outgoing
-    policy: allow
-  when: ansible_os_family == 'Debian'
+- name: Load the ruleset at boot
+  ansible.builtin.lineinfile:
+    path: "{{ __firewall_main_conf }}"
+    line: 'include "/etc/nftables.d/*.nft"'
+    create: false
 
-- name: Allow specified TCP ports (UFW)
-  community.general.ufw:
-    rule: allow
-    port: "{{ item | string }}"
-    proto: tcp
-  loop: "{{ firewall_allowed_tcp_ports }}"
-  when: ansible_os_family == 'Debian'
-
-- name: Allow specified UDP ports (UFW)
-  community.general.ufw:
-    rule: allow
-    port: "{{ item | string }}"
-    proto: udp
-  loop: "{{ firewall_allowed_udp_ports }}"
-  when:
-    - ansible_os_family == 'Debian'
-    - firewall_allowed_udp_ports | length > 0
-
-- name: Allow loopback interface
-  community.general.ufw:
-    rule: allow
-    interface: lo
-    direction: in
-  when: ansible_os_family == 'Debian'
-
-- name: Enable UFW
-  community.general.ufw:
-    state: enabled
-    logging: "on"
-  when: ansible_os_family == 'Debian'
-
-# ── firewalld (RHEL/CentOS) ────────────────────
-- name: Install firewalld
-  ansible.builtin.yum:
-    name: firewalld
-    state: present
-  when: ansible_os_family == 'RedHat'
-
-- name: Start and enable firewalld
-  ansible.builtin.service:
-    name: firewalld
-    state: started
+# Enable only: starting nftables.service on Debian runs "flush ruleset" and would
+# wipe tables owned by Docker or fail2ban. The ruleset is loaded with nft -f instead.
+- name: Enable nftables at boot
+  ansible.builtin.systemd_service:
+    name: nftables
     enabled: true
-  when: ansible_os_family == 'RedHat'
 
-- name: Allow TCP ports (firewalld)
-  ansible.posix.firewalld:
-    port: "{{ item }}/tcp"
-    permanent: true
-    state: enabled
-    immediate: true
-  loop: "{{ firewall_allowed_tcp_ports }}"
-  when: ansible_os_family == 'RedHat'
-
-- name: Verify firewall status
-  ansible.builtin.command:
-    cmd: "{{ 'ufw status' if ansible_os_family == 'Debian' else 'firewall-cmd --list-all' }}"
-  register: fw_status
+- name: Check whether the ruleset is loaded
+  ansible.builtin.command: nft list table inet hardening
+  register: firewall_table
   changed_when: false
+  failed_when: false
+  check_mode: false
 
-- name: Show firewall status
-  ansible.builtin.debug:
-    var: fw_status.stdout_lines
+- name: Load the ruleset if it is missing
+  ansible.builtin.command: nft -f /etc/nftables.d/50-hardening.nft
+  changed_when: true
+  when: firewall_table.rc != 0
+
+# The SSH role may move the port in this run; the new rules must be live first.
+- name: Apply firewall changes now
+  ansible.builtin.meta: flush_handlers
+
+# Package facts, not service facts: other units (e.g. fail2ban's After=firewalld.service)
+# make systemd list firewalld as a "not-found" unit even when it is not installed.
+- name: Gather installed packages
+  ansible.builtin.package_facts:
+  when: firewall_disable_conflicting | bool
+
+- name: Stop conflicting firewall managers
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ __firewall_conflicting_services }}"
+  when:
+    - firewall_disable_conflicting | bool
+    - item in ansible_facts['packages']
