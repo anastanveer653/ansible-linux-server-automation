@@ -1,0 +1,5 @@
+{{ ansible_managed | comment }}
+{% for module in baseline_disabled_kernel_modules %}
+install {{ module }} /bin/false
+blacklist {{ module }}
+{% endfor %}

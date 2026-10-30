@@ -1,0 +1,20 @@
+---
+- name: Set timezone
+  community.general.timezone:
+    name: "{{ baseline_timezone }}"
+
+- name: Generate locale
+  community.general.locale_gen:
+    name: "{{ baseline_locale }}"
+    state: present
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Set default system locale
+  ansible.builtin.lineinfile:
+    path: "{{ __baseline_locale_file }}"
+    regexp: "^LANG="
+    line: "LANG={{ baseline_locale }}"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"

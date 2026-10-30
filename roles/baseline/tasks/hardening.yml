@@ -1,0 +1,77 @@
+---
+- name: Create sysctl configuration directory
+  ansible.builtin.file:
+    path: /etc/sysctl.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy kernel hardening parameters
+  ansible.builtin.template:
+    src: sysctl-hardening.conf.j2
+    dest: /etc/sysctl.d/90-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Apply sysctl settings
+
+- name: Create modprobe configuration directory
+  ansible.builtin.file:
+    path: /etc/modprobe.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Disable unused kernel modules
+  ansible.builtin.template:
+    src: modprobe-hardening.conf.j2
+    dest: /etc/modprobe.d/90-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Disable core dumps
+  when: baseline_disable_core_dumps | bool
+  block:
+    - name: Disable core dumps via PAM limits
+      ansible.builtin.copy:
+        dest: /etc/security/limits.d/90-coredump.conf
+        content: "* hard core 0\n"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Create systemd-coredump drop-in directory
+      ansible.builtin.file:
+        path: /etc/systemd/coredump.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Disable core dump storage in systemd-coredump
+      ansible.builtin.copy:
+        dest: /etc/systemd/coredump.conf.d/90-hardening.conf
+        content: |
+          [Coredump]
+          Storage=none
+          ProcessSizeMax=0
+        owner: root
+        group: root
+        mode: "0644"
+
+- name: Set default umask for new users
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^UMASK\\s"
+    line: "UMASK           {{ baseline_umask }}"
+
+- name: Set default umask for login shells
+  ansible.builtin.copy:
+    dest: /etc/profile.d/90-umask.sh
+    content: "umask {{ baseline_umask }}\n"
+    owner: root
+    group: root
+    mode: "0644"

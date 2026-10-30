@@ -1,0 +1,80 @@
+---
+baseline_timezone: "UTC"
+baseline_locale: "en_US.UTF-8"
+
+# Distro-specific essentials (see vars/<os_family>.yml) plus your own additions.
+baseline_packages: "{{ __baseline_packages }}"
+baseline_packages_extra: []
+baseline_packages_absent: "{{ __baseline_packages_absent }}"
+
+# EPEL provides fail2ban, htop and friends on the RHEL family.
+baseline_enable_epel: true
+
+# Automatic security updates: unattended-upgrades (Debian) / dnf-automatic (RHEL).
+baseline_auto_updates: true
+baseline_auto_updates_reboot: false
+baseline_auto_updates_reboot_time: "03:00"
+
+# Kernel parameters. Merged with baseline_sysctl_overrides, written to /etc/sysctl.d/.
+baseline_sysctl:
+  # Network: no redirects, no source routing, reverse-path filtering, SYN cookies
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.default.accept_redirects: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.conf.default.secure_redirects: 0
+  net.ipv4.conf.all.send_redirects: 0
+  net.ipv4.conf.default.send_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.default.accept_source_route: 0
+  net.ipv4.conf.all.log_martians: 1
+  net.ipv4.conf.default.log_martians: 1
+  net.ipv4.conf.all.rp_filter: 1
+  net.ipv4.conf.default.rp_filter: 1
+  net.ipv4.icmp_echo_ignore_broadcasts: 1
+  net.ipv4.icmp_ignore_bogus_error_responses: 1
+  net.ipv4.tcp_syncookies: 1
+  net.ipv6.conf.all.accept_redirects: 0
+  net.ipv6.conf.default.accept_redirects: 0
+  net.ipv6.conf.all.accept_source_route: 0
+  net.ipv6.conf.default.accept_source_route: 0
+  # Kernel: hide pointers and dmesg, full ASLR, restrict ptrace and unprivileged BPF
+  kernel.dmesg_restrict: 1
+  kernel.kptr_restrict: 2
+  kernel.randomize_va_space: 2
+  kernel.yama.ptrace_scope: 1
+  kernel.unprivileged_bpf_disabled: 1
+  net.core.bpf_jit_harden: 2
+  # Filesystem
+  fs.protected_hardlinks: 1
+  fs.protected_symlinks: 1
+  fs.suid_dumpable: 0
+baseline_sysctl_overrides: {}
+baseline_disable_ipv6: false
+# Containers (and LXC VPSes) cannot set most kernel parameters: write the file, skip loading it.
+baseline_sysctl_apply: "{{ not baseline_in_container }}"
+
+# Rarely needed filesystems and network protocols (CIS 1.1.1 / 3.4).
+baseline_disabled_kernel_modules:
+  - cramfs
+  - freevxfs
+  - hfs
+  - hfsplus
+  - jffs2
+  - udf
+  - dccp
+  - sctp
+  - rds
+  - tipc
+
+baseline_umask: "027"
+baseline_disable_core_dumps: true
+
+baseline_auditd: true
+# Immutable rules (-e 2) can only be changed by rebooting.
+baseline_auditd_immutable: false
+
+baseline_marker_repo: "https://github.com/anastanveer653/ansible-linux-server-automation"
+
+baseline_in_container: >-
+  {{ ansible_facts['virtualization_role'] | default('') == 'guest'
+     and ansible_facts['virtualization_type'] | default('') in ['docker', 'podman', 'container', 'containerd', 'lxc'] }}

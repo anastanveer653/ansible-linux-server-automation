@@ -1,0 +1,30 @@
+---
+# curl is provided by curl-minimal on EL9; installing "curl" would conflict with it.
+__baseline_packages:
+  - bind-utils
+  - ca-certificates
+  - git
+  - glibc-langpack-en
+  - htop
+  - iproute
+  - jq
+  - lsof
+  - procps-ng
+  - rsync
+  - tar
+  - tcpdump
+  - tmux
+  - tzdata
+  - unzip
+  - vim-enhanced
+
+__baseline_packages_absent:
+  - rsh
+  - talk
+  - talk-server
+  - telnet
+  - tftp-server
+  - ypbind
+
+__baseline_auditd_package: audit
+__baseline_locale_file: /etc/locale.conf

@@ -1,0 +1,61 @@
+---
+argument_specs:
+  main:
+    short_description: System baseline and kernel hardening.
+    options:
+      baseline_timezone:
+        type: str
+        description: IANA timezone, e.g. UTC or Asia/Karachi.
+      baseline_locale:
+        type: str
+        description: System locale (LANG).
+      baseline_packages_extra:
+        type: list
+        elements: str
+        description: Packages installed in addition to the distro essentials.
+      baseline_enable_epel:
+        type: bool
+        description: Enable EPEL on the RHEL family.
+      baseline_auto_updates:
+        type: bool
+        description: Install and configure automatic security updates.
+      baseline_auto_updates_reboot:
+        type: bool
+        description: Reboot automatically when an update requires it.
+      baseline_auto_updates_reboot_time:
+        type: str
+        description: Reboot time for unattended-upgrades (Debian family).
+      baseline_sysctl:
+        type: dict
+        description: Kernel parameters written to /etc/sysctl.d/90-hardening.conf.
+      baseline_sysctl_overrides:
+        type: dict
+        description: Merged over baseline_sysctl.
+      baseline_disable_ipv6:
+        type: bool
+        description: Disable IPv6 through sysctl.
+      baseline_sysctl_apply:
+        type: bool
+        description: Load the parameters immediately (skipped in containers by default).
+      baseline_disabled_kernel_modules:
+        type: list
+        elements: str
+        description: Kernel modules that may not be loaded.
+      baseline_umask:
+        type: str
+        description: Default umask for login shells and new users.
+      baseline_disable_core_dumps:
+        type: bool
+        description: Disable core dumps through PAM limits and systemd-coredump.
+      baseline_auditd:
+        type: bool
+        description: Install auditd and deploy the hardening rule set.
+      baseline_auditd_immutable:
+        type: bool
+        description: Lock audit rules until reboot (-e 2).
+      baseline_marker_repo:
+        type: str
+        description: URL written to /etc/ansible-managed.
+      baseline_in_container:
+        type: bool
+        description: Host is a container; kernel-level settings are written but not applied.

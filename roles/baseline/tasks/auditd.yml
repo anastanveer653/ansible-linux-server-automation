@@ -1,0 +1,21 @@
+---
+- name: Install auditd
+  ansible.builtin.package:
+    name: "{{ __baseline_auditd_package }}"
+    state: present
+
+- name: Deploy audit rules
+  ansible.builtin.template:
+    src: audit-hardening.rules.j2
+    dest: /etc/audit/rules.d/90-hardening.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules
+
+- name: Enable auditd
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+  when: not baseline_in_container

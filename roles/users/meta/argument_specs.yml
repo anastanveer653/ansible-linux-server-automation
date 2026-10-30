@@ -1,0 +1,55 @@
+---
+argument_specs:
+  main:
+    short_description: Admin and additional user accounts.
+    options:
+      users_admin_name:
+        type: str
+        description: Name of the non-root sudo user.
+      users_admin_shell:
+        type: str
+        description: Login shell of the admin user.
+      users_admin_authorized_keys:
+        type: list
+        elements: str
+        description: Public keys allowed to log in as the admin user.
+      users_admin_authorized_keys_exclusive:
+        type: bool
+        description: Remove keys that are not listed.
+      users_admin_passwordless_sudo:
+        type: bool
+        description: Grant NOPASSWD sudo to the admin user.
+      users_admin_password_hash:
+        type: str
+        no_log: true
+        description: Crypt hash for the admin password, required when sudo asks for one.
+      users_lock_root_password:
+        type: bool
+        description: Lock the root account password.
+      users_managed:
+        type: list
+        elements: dict
+        description: Additional users.
+        options:
+          name:
+            type: str
+            required: true
+            description: User name.
+          groups:
+            type: list
+            elements: str
+            description: Supplementary groups (must exist).
+          shell:
+            type: str
+            description: Login shell.
+          authorized_keys:
+            type: list
+            elements: str
+            description: Public keys (managed exclusively).
+          sudo:
+            type: bool
+            description: Grant NOPASSWD sudo.
+          state:
+            type: str
+            choices: [present, absent]
+            description: absent removes the user and its home directory.

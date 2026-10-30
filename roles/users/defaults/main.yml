@@ -1,0 +1,25 @@
+---
+users_admin_name: "sysadmin"
+users_admin_shell: /bin/bash
+# sudo on Debian/Ubuntu, wheel on the RHEL family.
+users_admin_groups: "{{ __users_admin_groups }}"
+
+# Public keys allowed to log in as the admin user (required: password login is disabled).
+users_admin_authorized_keys: []
+# Remove any key on the server that is not listed above.
+users_admin_authorized_keys_exclusive: false
+
+# Key-only admins have no password, so they need NOPASSWD sudo.
+# Set to false together with users_admin_password_hash (mkpasswd -m sha-512).
+users_admin_passwordless_sudo: true
+users_admin_password_hash: ""
+
+users_lock_root_password: true
+
+# Additional accounts:
+#   - name: deploy
+#     groups: [docker]
+#     authorized_keys: ["ssh-ed25519 AAAA... deploy@ci"]
+#     sudo: false
+#     state: present          # absent removes the user and its home directory
+users_managed: []
