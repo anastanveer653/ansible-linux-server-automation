@@ -1,0 +1,16 @@
+---
+profile: production
+strict: true
+
+exclude_paths:
+  - .ansible/
+  - .github/
+  - venv/
+  - .venv/
+
+kinds:
+  - playbook: "playbooks/*.yml"
+  - playbook: "site.yml"
+  - playbook: "molecule/*/converge.yml"
+  - playbook: "molecule/*/verify.yml"
+  - vars: "inventory/group_vars/*.yml"
