@@ -1,97 +1,66 @@
 ---
-# ══════════════════════════════════════════════
-# Role: docker
-# Install Docker Engine + Docker Compose
-# ══════════════════════════════════════════════
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
 
-- name: Remove old Docker versions
+- name: Gather installed packages
+  ansible.builtin.package_facts:
+
+# Match real package names only: containerd.io "provides" runc/containerd, and
+# removing those names by provide would uninstall Docker on the next run.
+- name: Remove conflicting container packages
   ansible.builtin.package:
-    name:
-      - docker
-      - docker-engine
-      - docker.io
-      - containerd
-      - runc
+    name: "{{ __docker_conflicting_packages | select('in', ansible_facts['packages']) | list }}"
     state: absent
+  when: __docker_conflicting_packages | select('in', ansible_facts['packages']) | list | length > 0
 
-- name: Install Docker dependencies
-  ansible.builtin.apt:
-    name:
-      - ca-certificates
-      - curl
-      - gnupg
-      - lsb-release
+- name: Configure Docker repository
+  ansible.builtin.include_tasks: "repo_{{ ansible_facts['os_family'] }}.yml"
+
+- name: Install Docker Engine
+  ansible.builtin.package:
+    name: "{{ docker_packages }}"
     state: present
-  when: ansible_os_family == 'Debian'
 
-- name: Add Docker GPG key
-  ansible.builtin.shell: |
-    install -m 0755 -d /etc/apt/keyrings
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-      gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-  args:
-    creates: /etc/apt/keyrings/docker.gpg
-  when: ansible_os_family == 'Debian'
+- name: Create Docker config directory
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
-- name: Add Docker repository
-  ansible.builtin.shell: |
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
-      https://download.docker.com/linux/ubuntu \
-      $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-      tee /etc/apt/sources.list.d/docker.list > /dev/null
-  args:
-    creates: /etc/apt/sources.list.d/docker.list
-  when: ansible_os_family == 'Debian'
+- name: Configure Docker daemon
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    content: "{{ docker_daemon_config | to_nice_json(indent=2) }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+    validate: dockerd --validate --config-file=%s
+  vars:
+    docker_daemon_config: >-
+      {{ docker_daemon_defaults
+         | combine({'ip': '127.0.0.1'} if docker_publish_localhost_only | bool else {})
+         | combine(docker_daemon_options, recursive=true) }}
+  notify: Restart docker
 
-- name: Update apt and install Docker Engine
-  ansible.builtin.apt:
-    name:
-      - docker-ce
-      - docker-ce-cli
-      - containerd.io
-      - docker-buildx-plugin
-      - docker-compose-plugin
-    state: present
-    update_cache: true
-  when: ansible_os_family == 'Debian'
-  notify: Restart Docker
-
-- name: Enable and start Docker
-  ansible.builtin.service:
+- name: Enable Docker
+  ansible.builtin.systemd_service:
     name: docker
-    state: started
     enabled: true
+    state: started
 
-- name: Add users to docker group
+- name: Add users to the docker group
   ansible.builtin.user:
     name: "{{ item }}"
     groups: docker
     append: true
   loop: "{{ docker_users }}"
 
-- name: Configure Docker daemon (secure defaults)
-  ansible.builtin.copy:
-    content: |
-      {
-        "log-driver": "json-file",
-        "log-opts": {
-          "max-size": "100m",
-          "max-file": "3"
-        },
-        "live-restore": true,
-        "userland-proxy": false,
-        "no-new-privileges": true
-      }
-    dest: /etc/docker/daemon.json
-    mode: "0644"
-  notify: Restart Docker
+- name: Apply Docker changes now
+  ansible.builtin.meta: flush_handlers
 
-- name: Verify Docker installation
-  ansible.builtin.command: docker --version
-  register: docker_version
+- name: Check Docker daemon is responding
+  ansible.builtin.command: docker info --format '{{ "{{" }}.ServerVersion{{ "}}" }}'
+  register: docker_info
   changed_when: false
-
-- name: Show Docker version
-  ansible.builtin.debug:
-    msg: "Docker installed: {{ docker_version.stdout }}"

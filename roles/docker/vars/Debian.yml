@@ -1,0 +1,8 @@
+---
+__docker_conflicting_packages:
+  - containerd
+  - docker-compose
+  - docker-doc
+  - docker.io
+  - podman-docker
+  - runc

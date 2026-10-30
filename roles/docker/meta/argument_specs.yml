@@ -1,0 +1,25 @@
+---
+argument_specs:
+  main:
+    short_description: Docker Engine with secure defaults.
+    options:
+      docker_packages:
+        type: list
+        elements: str
+        description: Packages installed from the Docker repository.
+      docker_users:
+        type: list
+        elements: str
+        description: Users added to the docker group (root-equivalent).
+      docker_publish_localhost_only:
+        type: bool
+        description: Bind published ports to 127.0.0.1 unless an explicit IP is given.
+      docker_daemon_defaults:
+        type: dict
+        description: Base daemon.json settings.
+      docker_daemon_options:
+        type: dict
+        description: Merged over docker_daemon_defaults.
+      docker_arch_map:
+        type: dict
+        description: Machine architecture to Debian architecture.

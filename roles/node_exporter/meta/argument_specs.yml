@@ -1,0 +1,28 @@
+---
+argument_specs:
+  main:
+    short_description: Prometheus node_exporter.
+    options:
+      node_exporter_version:
+        type: str
+        description: Release to install; changing it upgrades in place.
+      node_exporter_download_url:
+        type: str
+        description: Base URL of the release (must contain sha256sums.txt).
+      node_exporter_listen_address:
+        type: str
+        description: host:port to listen on.
+      node_exporter_collectors_enabled:
+        type: list
+        elements: str
+        description: Extra collectors to enable.
+      node_exporter_collectors_disabled:
+        type: list
+        elements: str
+        description: Default collectors to disable.
+      node_exporter_textfile_dir:
+        type: str
+        description: Directory for the textfile collector.
+      node_exporter_arch_map:
+        type: dict
+        description: Machine architecture to release architecture.

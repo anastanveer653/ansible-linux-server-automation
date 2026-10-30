@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: docker
+  namespace: anastanveer653
+  author: Anas Tanveer
+  description: "Docker Engine from the official repository with secure daemon defaults"
+  license: MIT
+  min_ansible_version: "2.16"
+  platforms:
+    - name: Ubuntu
+      versions: [jammy, noble]
+    - name: Debian
+      versions: [bookworm, trixie]
+    - name: EL
+      versions: ["9"]
+  galaxy_tags: [hardening, security, linux, server]
+dependencies: []

@@ -1,0 +1,9 @@
+---
+__docker_conflicting_packages:
+  - buildah
+  - docker
+  - docker-client
+  - docker-common
+  - docker-engine
+  - podman
+  - runc
