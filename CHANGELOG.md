@@ -40,6 +40,7 @@ A rewrite focused on correctness across distributions, lockout safety and automa
 - RHEL failures: `sudo` group, `auditd` package name, Debian-only packages, missing Docker install.
 - Non-idempotent runs (`ufw reset` on every run, timestamp in the marker file).
 - `requirements.yml` listed `ansible.builtin`, which cannot be installed from Galaxy.
+- Managed users without `groups` failed on ansible-core 2.21 (`append` now requires `groups`).
 
 ## [1.0.0] - 2026-04-04
 
