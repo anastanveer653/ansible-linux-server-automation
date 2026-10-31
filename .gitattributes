@@ -1,1 +1,5 @@
 * text=auto eol=lf
+
+# Count Ansible YAML in the language stats, so GitHub shows the repo as YAML, not Jinja.
+*.yml linguist-detectable=true
+*.yaml linguist-detectable=true
